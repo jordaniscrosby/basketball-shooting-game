@@ -109,8 +109,11 @@ export const tuning = {
     /**
      * How strongly flick-speed deviation from reference moves power.
      * 0 = Messenger-style full normalization; 1 = raw. Difficulty dial.
+     * Range error ≈ 2× speed error and the 45°-entry depth window is ~±1.3%
+     * of range, so this starts low: ±10% natural swipe variance → ~±1.8%
+     * power → makeable-with-rattle. Raise with streak, never past ~0.5.
      */
-    powerSensitivity: 0.55,
+    powerSensitivity: 0.18,
     /** Swipe azimuth (rad off vertical) → lateral aim error gain (rad/rad). */
     lateralGain: 0.35,
     /** Max lateral angle error (rad). */
