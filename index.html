@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Streak — Basketball Shooting</title>
+    <link rel="stylesheet" href="/src/ui/hud.css" />
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="hud">
+      <div id="streak-counter">0</div>
+      <div id="heat-label"></div>
+      <div id="floating-layer"></div>
+      <div id="score-screen" class="hidden">
+        <div class="score-card">
+          <h1 id="final-streak">0</h1>
+          <p id="best-line">best 0</p>
+          <button id="retry-btn">RETRY</button>
+        </div>
+      </div>
+      <div id="fps"></div>
+    </div>
+    <canvas id="swipe-overlay"></canvas>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
