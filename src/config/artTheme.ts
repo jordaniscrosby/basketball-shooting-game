@@ -20,10 +20,17 @@ export const artTheme = {
     rim: '#d94f30',
     pole: '#5a6570',
     net: '#f5efe0',
-    /** Flat painted gym wall behind the hoop. */
-    gymWall: '#3f7d8c',
-    gymWallDark: '#356b78',
-    gymWallLight: '#4b8d9c',
+    /** Rural park grounds: sky, lawn, paved trails, painted countryside backdrop. */
+    sky: '#7fc4e8',
+    grass: '#85b968',
+    grassLight: '#95c775',
+    grassDark: '#6ca254',
+    hillFar: '#a9d18a',
+    trail: '#dbcfb2',
+    benchWood: '#a97a45',
+    treeLeaf: '#4f8f43',
+    treeTrunk: '#7d5433',
+    cowMuzzle: '#e2a58c',
     /** Paper/cream — UI cards, floor apron. */
     paper: '#f8f2e2',
     star: '#f7c948',
@@ -43,6 +50,8 @@ export const artTheme = {
     rim: 0.007,
     board: 0.016,
     pole: 0.014,
+    /** Park props: bench, cow. */
+    prop: 0.01,
   },
 
   boil: {

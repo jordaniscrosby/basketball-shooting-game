@@ -18,7 +18,7 @@ export function createScene(canvas: HTMLCanvasElement): GameScene {
   renderer.toneMapping = THREE.NoToneMapping;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(artTheme.palette.gymWall);
+  scene.background = new THREE.Color(artTheme.palette.sky);
 
   const camera = new THREE.PerspectiveCamera(
     tuning.camera.fov,
