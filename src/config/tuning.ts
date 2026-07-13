@@ -81,7 +81,7 @@ export const tuning = {
     belowSensorOffset: 0.12,
     sensorHalfHeight: 0.02,
     /** Sensor radius as a fraction of rim inner radius. */
-    sensorRadiusScale: 0.6,
+    sensorRadiusScale: 1.0,
     /** Radius of the "possession reset" region around the hoop (m). */
     resetRegionRadius: 1.2,
   },
@@ -140,6 +140,8 @@ export const tuning = {
   },
 
   game: {
+    /** Ball release height above the floor at the shooter position (m). */
+    releaseHeight: 2.0,
     /** Streak milestones that escalate the tier mix. */
     heatAt: 3,
     mixAt: 7,

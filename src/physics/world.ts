@@ -59,8 +59,7 @@ export function createPhysicsWorld(): PhysicsWorld {
     RAPIER.ColliderDesc.cuboid(60, 0.5, 60)
       .setTranslation(0, -0.5, 0)
       .setRestitution(tuning.floor.restitution)
-      .setFriction(tuning.floor.friction)
-      .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max),
+      .setFriction(tuning.floor.friction),
     floorBody,
   );
 
@@ -86,7 +85,6 @@ export function createBall(world: RAPIER.World, position: THREE.Vector3): Ball {
       .setMass(tuning.ball.mass)
       .setRestitution(tuning.ball.restitution)
       .setFriction(tuning.ball.friction)
-      .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max)
       .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),
     body,
   );
