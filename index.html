@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Streak — Basketball Shooting</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏀</text></svg>"
+    />
+    <link rel="preload" href="/Program Files/Git/basketball-shooting-game/fonts/bangers-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/Program Files/Git/basketball-shooting-game/fonts/patrick-hand-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <script type="module" crossorigin src="/Program Files/Git/basketball-shooting-game/assets/index-DHn-3Pil.js"></script>
+    <link rel="stylesheet" crossorigin href="/Program Files/Git/basketball-shooting-game/assets/index-BegJtt2_.css">
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <canvas id="fx-overlay"></canvas>
+    <div id="hud">
+      <div id="scoreboard">
+        <div class="sb-cell">
+          <div class="sb-digits" id="streak-count"></div>
+        </div>
+        <div class="sb-cell sb-points">
+          <div class="sb-digits" id="run-score"></div>
+        </div>
+      </div>
+      <button id="stats-btn">stats</button>
+      <button id="controls-btn"></button>
+      <div id="score-screen" class="hidden">
+        <div class="score-card">
+          <h1 id="best-run">0</h1>
+          <p id="best-line">best run</p>
+          <ol id="leaderboard"></ol>
+          <div id="career-stats"></div>
+          <button id="retry-btn">BACK TO COURT</button>
+        </div>
+      </div>
+      <div id="fps"></div>
+    </div>
+    <canvas id="swipe-overlay"></canvas>
+    <div id="grain"></div>
+  </body>
+</html>
