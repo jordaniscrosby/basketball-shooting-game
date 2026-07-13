@@ -1,0 +1,20 @@
+# src/input/ — gesture input schemes
+
+Three input schemes, one contract: `SwipeInput` (touch) and `SlingshotInput` (mouse pull-back) both emit the same `Gesture` type (defined in `swipe.ts`: `azimuth`, `upSpeed`, `curvature`, `samples`), and `KeySteer` (WASD) emits the same screen-space drag-velocity units as the touch steer-drag. Downstream `systems/aim.aimShot` and `systems/curve.FlightSteer` are therefore shared untouched across all schemes. **If you add an input scheme, emit `Gesture` — don't add a parallel path.**
+
+Units: viewport-fraction coordinates (x/width, y/height) with **screen-y positive DOWN**; velocities in viewport-heights/s; timestamps in ms. Expect sign flips at the boundary (e.g. `upSpeed = -v.vy`).
+
+## swipe.ts
+`class SwipeInput` — primary Pointer-Events path. On pointer-down decides aim-gesture vs mid-flight steer-drag via callbacks (`steerActive()`/`steerGrabCheck()`). Private `evaluate()` validates gestures (min upward length `tuning.input.minSwipeFrac`, predominantly vertical, min flick speed) and computes azimuth from release-velocity direction + signed curvature as max perpendicular deviation from the start→end chord. Gotcha: the pointer-**up** event is deliberately NOT fed to the velocity estimator — matches Android, where it would drag release velocity toward 0.
+
+## slingshot.ts
+`class SlingshotInput` — press-on-ball, pull down/back, release fires opposite. Synthesizes a `Gesture`: pull direction → azimuth, pull length vs `tuning.slingshot.referenceDragFrac` → synthetic `upSpeed` via `input.referenceFlickSpeed`, `curvature: 0` (in-air spin belongs to WASD). Its pull feedback renders through `debug/swipeOverlay.ts` but is real gameplay UI (not debug-gated).
+
+## keySteer.ts
+`class KeySteer` — WASD air steering. `poll()` returns `{vx, vy} | null`; **polled from the loop's `update`** (main.ts), not event-pushed. Clears held keys on window `blur` (backgrounded-tab keyup loss). Diagonals normalized to `tuning.curve.keySpeed`.
+
+## velocityTracker.ts
+`estimateVelocity(samples)` — Android-parity Lsq2 estimator: least-squares quadratic fit, velocity = derivative at the latest sample. The quadratic term matters: a linear fit underestimates an accelerating flick (verified analytically in the test). Falls back to linear when near-singular; `windowSamples()` keeps ≤`estimatorMaxSamples` within `estimatorWindowMs`. Kept Android-parity deliberately so the eventual iOS port preserves feel.
+
+## controlMode.ts
+`ControlMode = 'swipe' | 'slingshot'`. `detectControlMode()` via `(pointer: fine)` media query; `load/saveControlMode()` persist to localStorage key `streak.controlMode`. All browser API access try/catch-guarded, falls back to `'swipe'`.
