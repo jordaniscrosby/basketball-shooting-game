@@ -16,9 +16,11 @@
   --ink: #2b1d16;
   --paper: #f8f2e2;
   --accent: #c9563c;
-  --star: #f7c948;
   --fire: #e8542f;
   --grain-opacity: 0.05;
+  /* Scoreboard: white panel, near-black hand-drawn segments. */
+  --sb-ink: #0a0a0a;
+  --sb-paper: #ffffff;
 }
 
 * {
@@ -82,54 +84,330 @@ body {
   box-shadow: 3px 4px 0 rgba(43, 29, 22, 0.35);
 }
 
-#run-score {
+/* ── Scoreboard: hand-drawn white panel, seven-segment digits ──
+   Digits are built by ui/hud.ts (SegmentCell): each .seg-digit holds seven
+   <i class="seg seg-a…g"> bars; unlit bars stay faintly visible like a real
+   LCD, .lit bars go full ink. Wobbly skews/rotations sell the hand-drawn look. */
+
+#scoreboard {
   position: absolute;
-  top: 3vh;
-  left: 50%;
-  transform: translateX(-50%) rotate(-1.6deg);
-  font-family: 'Bangers', cursive;
-  font-size: clamp(2.6rem, 7.5vw, 4.4rem);
-  letter-spacing: 0.04em;
-  color: var(--ink);
-  text-shadow:
-    2px 0 0 var(--paper), -2px 0 0 var(--paper),
-    0 2px 0 var(--paper), 0 -2px 0 var(--paper),
-    3px 4px 0 rgba(43, 29, 22, 0.28);
-  transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+  top: 14px;
+  left: 14px;
+  background: var(--sb-paper);
+  border: 3px solid var(--sb-ink);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  box-shadow: 3px 4px 0 rgba(20, 20, 20, 0.25);
+  padding: 0.55em 1.4em 0.45em;
+  transform: rotate(-0.6deg);
+  color: var(--sb-ink);
+  text-align: center;
 }
 
-#run-score.punch {
-  transform: translateX(-50%) rotate(-1.6deg) scale(1.35);
+.sb-cells {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: clamp(1.2em, 4vw, 2.2em);
 }
 
-#run-score.on-fire {
+.sb-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  align-self: stretch;
+}
+
+.sb-label {
+  font-family: 'Patrick Hand', cursive;
+  font-size: clamp(0.72rem, 2vw, 0.92rem);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  text-transform: uppercase;
+  color: var(--sb-ink);
+  margin-bottom: 0.35em;
+}
+
+.sb-digits {
+  display: flex;
+  align-items: center;
+  font-size: clamp(1.7rem, 5.6vw, 2.5rem);
+  line-height: 1;
+  color: var(--sb-ink);
+  transition: color 0.4s ease;
+}
+
+/* Segments heat up with the run: amber → fire → rainbow-cycling at superstar. */
+#scoreboard.heat-warm .sb-digits {
+  color: #e08b00;
+}
+
+#scoreboard.heat-fire .sb-digits {
   color: var(--fire);
 }
 
-#star-meter {
-  position: absolute;
-  top: calc(3vh + clamp(2.9rem, 8vw, 4.9rem));
-  left: 50%;
-  transform: translateX(-50%) rotate(0.8deg);
-  font-size: clamp(1.1rem, 3vw, 1.6rem);
-  letter-spacing: 0.18em;
-  color: rgba(43, 29, 22, 0.28);
-  text-shadow: 1px 1px 0 var(--paper);
+#scoreboard.heat-superstar .sb-digits {
+  color: var(--fire);
+  animation: hue-cycle 1.6s linear infinite;
 }
 
-#star-meter .lit {
-  color: var(--star);
-  -webkit-text-stroke: 1px var(--ink);
+/* Mult badge: hand-drawn comic starburst sticker inline after the points
+   digits. ::before paints the ink outline (same burst, slightly inflated),
+   ::after the tier-colored fill. Tiers set by hud.ts via data-tier: 0 sits
+   dim next to the score; 1-3 light up and glow/bounce with rising urgency. */
+.sb-row {
+  display: flex;
+  align-items: center;
 }
 
-#streak-line {
+.sb-badge {
+  --badge-bg: var(--sb-paper);
+  --badge-fg: var(--sb-ink);
+  --badge-glow: transparent;
+  position: relative;
+  width: 0.95em;
+  height: 0.95em;
+  margin-left: 0.3em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(1.7rem, 5.6vw, 2.5rem);
+  line-height: 1;
+  transform: rotate(-5deg);
+  opacity: 0.25;
+  transition: opacity 0.35s ease;
+}
+
+.sb-badge:not([data-tier='0']) {
+  opacity: 1;
+}
+
+.sb-badge::before,
+.sb-badge::after {
+  content: '';
   position: absolute;
-  top: calc(3vh + clamp(4.6rem, 12vw, 7.2rem));
-  left: 50%;
-  transform: translateX(-50%) rotate(-0.6deg);
-  font-size: clamp(0.95rem, 2.4vw, 1.2rem);
-  color: var(--ink);
-  text-shadow: 1px 1px 0 var(--paper);
+  clip-path: polygon(
+    50% 0%, 61% 12%, 76% 5%, 79% 22%, 95% 23%, 89% 38%, 100% 50%,
+    88% 61%, 95% 76%, 78% 79%, 74% 95%, 60% 87%, 50% 100%, 39% 88%,
+    24% 95%, 22% 78%, 5% 76%, 12% 61%, 0% 50%, 12% 38%, 6% 24%,
+    21% 21%, 26% 5%, 39% 12%
+  );
+}
+
+.sb-badge::before {
+  inset: -0.1em;
+  background: var(--sb-ink);
+}
+
+.sb-badge::after {
+  inset: 0;
+  background: var(--badge-bg);
+  transition: background-color 0.35s ease;
+}
+
+#mult-count {
+  position: relative;
+  z-index: 1;
+  font-family: 'Bangers', cursive;
+  font-size: 0.36em;
+  color: var(--badge-fg);
+  transform: rotate(2deg);
+}
+
+/* badge-bounce animates transform, badge-glow animates filter — kept as two
+   animations so the superstar variant can swap the filter track for one that
+   also hue-cycles without the two fighting over the same property. */
+.sb-badge[data-tier='1'] {
+  --badge-bg: #f7c948;
+  --badge-glow: rgba(247, 201, 72, 0.9);
+  animation:
+    badge-bounce 1.6s ease-in-out infinite,
+    badge-glow 1.6s ease-in-out infinite;
+}
+
+.sb-badge[data-tier='2'] {
+  --badge-bg: var(--fire);
+  --badge-fg: var(--sb-paper);
+  --badge-glow: rgba(232, 84, 47, 0.9);
+  animation:
+    badge-bounce 1s ease-in-out infinite,
+    badge-glow 1s ease-in-out infinite;
+}
+
+.sb-badge[data-tier='3'] {
+  --badge-bg: #d92b2b;
+  --badge-fg: var(--sb-paper);
+  --badge-glow: rgba(217, 43, 43, 0.9);
+  animation:
+    badge-bounce 0.75s ease-in-out infinite,
+    badge-glow 0.75s ease-in-out infinite;
+}
+
+#scoreboard.heat-superstar .sb-badge[data-tier='3'] {
+  animation:
+    badge-bounce 0.75s ease-in-out infinite,
+    badge-glow-hue 1.6s linear infinite;
+}
+
+/* Pop on multiplier increase — declared after the tier rules so it wins. */
+.sb-badge.pop {
+  animation: badge-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes badge-pop {
+  0% { transform: scale(0.2) rotate(-30deg); }
+  60% { transform: scale(1.35) rotate(4deg); }
+  100% { transform: scale(1) rotate(-5deg); }
+}
+
+@keyframes badge-bounce {
+  0%, 100% { transform: scale(1) rotate(-5deg); }
+  50% { transform: scale(1.08) rotate(-1deg); }
+}
+
+@keyframes badge-glow {
+  0%, 100% { filter: drop-shadow(0 0 0 var(--badge-glow)); }
+  50% { filter: drop-shadow(0 0 0.14em var(--badge-glow)); }
+}
+
+@keyframes badge-glow-hue {
+  from { filter: hue-rotate(0deg) drop-shadow(0 0 0.12em var(--badge-glow)); }
+  to { filter: hue-rotate(360deg) drop-shadow(0 0 0.12em var(--badge-glow)); }
+}
+
+@keyframes hue-cycle {
+  from { filter: hue-rotate(0deg); }
+  to { filter: hue-rotate(360deg); }
+}
+
+.seg-digit {
+  position: relative;
+  width: 0.58em;
+  height: 0.95em;
+  transform: skewX(-3.5deg) rotate(-0.9deg);
+}
+
+.seg-digit + .seg-digit {
+  margin-left: 0.14em;
+}
+
+.seg-digit:nth-child(even) {
+  transform: skewX(-3.5deg) rotate(0.8deg);
+}
+
+.seg {
+  position: absolute;
+  background: currentColor;
+  opacity: 0.09;
+  border-radius: 0.05em;
+  transition: opacity 0.06s linear;
+}
+
+.seg.lit {
+  opacity: 1;
+}
+
+/* Horizontal bars (top / middle / bottom). */
+.seg-a,
+.seg-g,
+.seg-d {
+  left: 15%;
+  right: 15%;
+  height: 18%;
+  clip-path: polygon(12% 0, 88% 0, 100% 50%, 88% 100%, 12% 100%, 0 50%);
+}
+
+.seg-a { top: 0; transform: rotate(-1.4deg); }
+.seg-g { top: 41%; transform: rotate(1deg); }
+.seg-d { bottom: 0; transform: rotate(-1deg); }
+
+/* Vertical bars (upper f/b, lower e/c). */
+.seg-b,
+.seg-c,
+.seg-e,
+.seg-f {
+  width: 18%;
+  height: 42%;
+  clip-path: polygon(50% 0, 100% 12%, 100% 88%, 50% 100%, 0 88%, 0 12%);
+}
+
+.seg-f { left: 0; top: 4.5%; transform: rotate(1.2deg); }
+.seg-b { right: 0; top: 4.5%; transform: rotate(-1deg); }
+.seg-e { left: 0; bottom: 4.5%; transform: rotate(-1.2deg); }
+.seg-c { right: 0; bottom: 4.5%; transform: rotate(0.9deg); }
+
+#run-score.punch {
+  animation: led-punch 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Mobile: full-width top bar instead of the floating top-left panel. */
+@media (max-width: 640px) {
+  #scoreboard {
+    top: 0;
+    left: 0;
+    right: 0;
+    transform: none;
+    border-radius: 0;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    box-shadow: 0 3px 0 rgba(20, 20, 20, 0.2);
+    padding: 0.45em 1em 0.4em;
+  }
+
+  .sb-cells {
+    justify-content: space-evenly;
+  }
+}
+
+/* Heat lamp: indicator dot + label under the cells. */
+#heat-label {
+  margin-top: 0.2em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+  font-family: 'Bangers', cursive;
+  font-size: clamp(0.75rem, 2vw, 0.95rem);
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  text-transform: uppercase;
+  color: var(--sb-ink);
+  opacity: 0;
+  transition: opacity 0.35s ease-out;
+}
+
+#heat-label.visible {
+  opacity: 1;
+}
+
+.sb-lamp {
+  flex: 0 0 auto;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+#scoreboard.heat-fire #heat-label {
+  color: var(--fire);
+}
+
+#scoreboard.heat-fire .sb-lamp,
+#scoreboard.heat-superstar .sb-lamp {
+  animation: lamp-blink 0.7s ease-in-out infinite;
+}
+
+@keyframes led-punch {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
+
+@keyframes lamp-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 #stats-btn {
@@ -172,27 +450,6 @@ body {
 }
 
 #controls-btn:hover {
-  opacity: 1;
-}
-
-#heat-label {
-  position: absolute;
-  top: calc(3vh + clamp(6.1rem, 15vw, 9rem));
-  left: 50%;
-  transform: translateX(-50%) rotate(1.4deg);
-  font-family: 'Bangers', cursive;
-  font-size: clamp(0.9rem, 2.4vw, 1.25rem);
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--fire);
-  text-shadow:
-    1px 0 0 var(--paper), -1px 0 0 var(--paper),
-    0 1px 0 var(--paper), 0 -1px 0 var(--paper);
-  opacity: 0;
-  transition: opacity 0.35s ease-out;
-}
-
-#heat-label.visible {
   opacity: 1;
 }
 
@@ -314,4 +571,11 @@ body.shake #game {
   75% {
     transform: translate(2px, 1px);
   }
+}
+
+/* Art-review mode (?art=<preset>, src/debug/artReview.ts): hide all game
+   chrome so screenshots capture only the rendered scene. */
+body.art-review #hud,
+body.art-review .lil-gui {
+  display: none;
 }

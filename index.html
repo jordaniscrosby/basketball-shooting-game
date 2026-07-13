@@ -19,10 +19,24 @@
     <canvas id="game"></canvas>
     <canvas id="fx-overlay"></canvas>
     <div id="hud">
-      <div id="run-score">0</div>
-      <div id="star-meter"></div>
-      <div id="streak-line"></div>
-      <div id="heat-label"></div>
+      <div id="scoreboard">
+        <div class="sb-cells">
+          <div class="sb-cell">
+            <span class="sb-label">streak</span>
+            <div class="sb-digits" id="streak-count"></div>
+          </div>
+          <div class="sb-cell sb-points">
+            <span class="sb-label">points</span>
+            <div class="sb-row">
+              <div class="sb-digits" id="run-score"></div>
+              <div class="sb-badge" id="mult-badge" data-tier="0">
+                <span id="mult-count">×1</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="heat-label"><span class="sb-lamp"></span><span id="heat-text"></span></div>
+      </div>
       <button id="stats-btn">stats</button>
       <button id="controls-btn"></button>
       <div id="score-screen" class="hidden">
