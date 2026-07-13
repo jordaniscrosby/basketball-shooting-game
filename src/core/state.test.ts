@@ -1,64 +1,122 @@
 import { describe, it, expect } from 'vitest';
 import { GameRun } from './state';
 import { tuning } from '../config/tuning';
+import type { ShotFacts } from '../systems/scoreEngine';
+
+const s = tuning.score;
 
 function toFlight(run: GameRun): void {
   run.beginAiming();
   run.release();
 }
 
-describe('GameRun FSM', () => {
-  it('walks the happy path and scores makes/swishes', () => {
+function plainMake(): ShotFacts {
+  return { result: 'make', band: 'close', bankUsed: false, rimContacts: 1, curve: null };
+}
+
+describe('GameRun FSM (continuous session)', () => {
+  it('scores makes through the engine and accumulates the run score', () => {
     const run = new GameRun();
     toFlight(run);
-    expect(run.resolve('make').points).toBe(tuning.game.pointsMake);
-    expect(run.score).toBe(1);
+    const out = run.resolve('make', plainMake());
+    expect(out.points).toBe(s.base);
+    expect(run.runScore).toBe(s.base);
+    expect(run.streak).toBe(1);
     run.nextShot();
     toFlight(run);
-    expect(run.resolve('swish').points).toBe(tuning.game.pointsSwish);
-    expect(run.score).toBe(3);
-    expect(run.makes).toBe(2);
+    const out2 = run.resolve('swish', { ...plainMake(), result: 'swish', rimContacts: 0 });
+    expect(out2.points).toBe(s.base + s.bonus.swish);
+    expect(run.runScore).toBe(s.base * 2 + s.bonus.swish);
   });
 
-  it('one miss ends the run and records best', () => {
-    const run = new GameRun(2);
+  it('a miss ends the RUN, not the session: play continues via nextShot', () => {
+    const run = new GameRun();
     toFlight(run);
-    run.resolve('swish');
+    run.resolve('make', plainMake());
     run.nextShot();
     toFlight(run);
     const out = run.resolve('miss');
-    expect(out.gameOver).toBe(true);
-    expect(run.phase).toBe('gameover');
-    expect(run.best).toBe(2); // score 2 ties previous best
+    expect(run.phase).toBe('resolved'); // NOT gameover
+    expect(out.endedRun).toEqual({ runScore: s.base, streak: 1, isNewBest: true });
+    expect(run.streak).toBe(0);
+    expect(run.runScore).toBe(0);
+    expect(run.bestRun).toBe(s.base);
+    run.nextShot(); // continuous play — straight back to positioning
+    expect(run.phase).toBe('positioning');
   });
 
-  it('retry resets the run instantly but keeps best', () => {
-    const run = new GameRun();
+  it('an ended run beating the best reports isNewBest', () => {
+    const run = new GameRun(10_000);
     toFlight(run);
-    run.resolve('swish');
+    run.resolve('make', plainMake());
     run.nextShot();
     toFlight(run);
-    run.resolve('miss');
-    run.retry();
-    expect(run.phase).toBe('positioning');
-    expect(run.score).toBe(0);
-    expect(run.makes).toBe(0);
-    expect(run.best).toBe(2);
+    const out = run.resolve('miss');
+    expect(out.endedRun!.isNewBest).toBe(false);
+    expect(run.bestRun).toBe(10_000);
   });
 
-  it('reports heat milestones exactly once, on the crossing shot', () => {
+  it('awards star milestones exactly once, on the crossing make', () => {
     const run = new GameRun();
-    const milestones: Array<string | null> = [];
-    for (let i = 0; i < tuning.game.fireAt; i++) {
+    const milestones: Array<number | null> = [];
+    for (let i = 0; i < 10; i++) {
       toFlight(run);
-      milestones.push(run.resolve('make').milestone);
+      milestones.push(run.resolve('make', plainMake()).starMilestone);
       run.nextShot();
     }
-    expect(milestones.filter((m) => m === 'heat')).toHaveLength(1);
-    expect(milestones.filter((m) => m === 'fire')).toHaveLength(1);
-    expect(milestones[tuning.game.heatAt - 1]).toBe('heat');
-    expect(milestones[tuning.game.fireAt - 1]).toBe('fire');
+    // Streak milestones 3/7/10 → stars 1/2/3 on those shots, null elsewhere.
+    expect(milestones[2]).toBe(1);
+    expect(milestones[6]).toBe(2);
+    expect(milestones[9]).toBe(3);
+    expect(milestones.filter((m) => m !== null)).toHaveLength(3);
+    expect(run.stars).toBe(3);
+    expect(run.multiplier).toBe(4);
     expect(run.heat).toBe('fire');
+  });
+
+  it('heat states key off stars: ★1 warm, ★3 fire, ★5 superstar', () => {
+    const run = new GameRun();
+    expect(run.heat).toBe('cold');
+    const play = (n: number) => {
+      for (let i = 0; i < n; i++) {
+        toFlight(run);
+        run.resolve('make', plainMake());
+        run.nextShot();
+      }
+    };
+    play(3);
+    expect(run.heat).toBe('warm');
+    play(7);
+    expect(run.heat).toBe('fire');
+    play(10);
+    expect(run.streak).toBe(20);
+    expect(run.heat).toBe('superstar');
+    expect(run.multiplier).toBe(6);
+  });
+
+  it('gameover is only reachable via the deliberate endSession', () => {
+    const run = new GameRun();
+    run.beginAiming();
+    run.endSession();
+    expect(run.phase).toBe('gameover');
+    run.retry();
+    expect(run.phase).toBe('positioning');
+    // The session pause does not touch the run.
+    expect(run.streak).toBe(0);
+    expect(run.runScore).toBe(0);
+  });
+
+  it('the milestone make earns its new multiplier immediately', () => {
+    const run = new GameRun();
+    for (let i = 0; i < 2; i++) {
+      toFlight(run);
+      run.resolve('make', plainMake());
+      run.nextShot();
+    }
+    toFlight(run);
+    const out = run.resolve('make', plainMake()); // streak → 3, ★1, ×2
+    expect(out.breakdown!.multiplier).toBe(2);
+    expect(out.points).toBe(s.base * 2);
   });
 
   it('rejects out-of-order transitions', () => {
@@ -67,5 +125,6 @@ describe('GameRun FSM', () => {
     expect(() => run.resolve('make')).toThrow();
     run.beginAiming();
     expect(() => run.beginAiming()).toThrow();
+    expect(() => run.retry()).toThrow();
   });
 });

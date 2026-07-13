@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { tuning, derived } from './tuning';
 
+export type DistanceBand = 'close' | 'mid' | 'three' | 'deep';
+
 export interface ShotPosition {
   id: string;
   name: string;
@@ -10,6 +12,12 @@ export interface ShotPosition {
   z: number;
   /** Court octant (0–7 by angle around the hoop) for anti-repeat shuffling. */
   octant: number;
+  /** Horizontal distance to the rim centre (m). */
+  dist: number;
+  /** Scoring distance band (see tuning.score.band*). */
+  band: DistanceBand;
+  /** Difficulty rating 0.05–1, distance-dominated (see tuning.difficulty). */
+  difficulty: number;
 }
 
 /**
@@ -38,15 +46,38 @@ export function getPositions(): ShotPosition[] {
     ['arc3-l', 'Left arc 3', 3, -5.3, 5.3],
     ['arc3-r', 'Right arc 3', 3, 5.3, 5.3],
     ['deep3', 'Deep top 3', 3, 0, 7.9],
+    // Deep/logo pool — the DEEP!! bonus lives here (battery-validated).
+    ['logo', 'From the logo', 3, 0, 9.5],
+    ['deep-wing-l', 'Deep left wing', 3, -6.5, 7.0],
+    ['deep-wing-r', 'Deep right wing', 3, 6.5, 7.0],
   ];
-  return raw.map(([id, name, tier, x, dz]) => ({
-    id,
-    name,
-    tier,
-    x,
-    z: rimZ + dz,
-    octant: octantOf(x, dz),
-  }));
+  return raw.map(([id, name, tier, x, dz]) => {
+    const dist = Math.hypot(x, dz);
+    return {
+      id,
+      name,
+      tier,
+      x,
+      z: rimZ + dz,
+      octant: octantOf(x, dz),
+      dist,
+      band: bandOf(dist),
+      difficulty: difficultyOf(dist),
+    };
+  });
+}
+
+function difficultyOf(dist: number): number {
+  const d = tuning.difficulty;
+  return Math.min(1, Math.max(0.05, (dist - d.distFloor) / d.distSpan));
+}
+
+function bandOf(dist: number): DistanceBand {
+  const s = tuning.score;
+  if (dist >= s.bandDeep) return 'deep';
+  if (dist >= s.bandThree) return 'three';
+  if (dist >= s.bandMid) return 'mid';
+  return 'close';
 }
 
 function octantOf(x: number, dz: number): number {

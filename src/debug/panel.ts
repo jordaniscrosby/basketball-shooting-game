@@ -1,5 +1,7 @@
 import GUI from 'lil-gui';
 import { tuning } from '../config/tuning';
+import { artTheme } from '../config/artTheme';
+import { refreshGradientMap } from '../scene/toon';
 
 export interface PanelHooks {
   /** Push material params (restitution/friction) onto live colliders. */
@@ -48,11 +50,31 @@ export function createDebugPanel(hooks: PanelHooks): GUI {
   input.add(tuning.input, 'referenceFlickSpeed', 0.5, 4, 0.05);
   input.close();
 
+  const curve = gui.addFolder('curve');
+  curve.add(tuning.curve, 'enabled');
+  curve.add(tuning.curve, 'lateralGain', 0, 20, 0.1);
+  curve.add(tuning.curve, 'depthGain', 0, 20, 0.1);
+  curve.add(tuning.curve, 'budget', 0, 5, 0.05);
+  curve.add(tuning.curve, 'maxAccel', 0, 25, 0.25);
+  curve.add(tuning.curve, 'grabRadius', 0.05, 9, 0.05);
+  curve.add(tuning.curve, 'cutoffAfterContact');
+  curve.add(tuning.curve, 'fadeBelowFrac', 0, 1, 0.01);
+  curve.add(tuning.curve, 'visualSpinGain', 0, 4, 0.05);
+  curve.close();
+
   const spin = gui.addFolder('spin');
   spin.add(tuning.spin, 'backspinHz', 0, 6, 0.1);
   spin.add(tuning.spin, 'sidespinMaxHz', 0, 8, 0.1);
   spin.add(tuning.spin, 'magnusK', 0, 0.0005, 0.00001);
   spin.close();
+
+  const art = gui.addFolder('art');
+  art.add(artTheme.boil, 'rateHz', 0, 16, 0.5);
+  art.add(artTheme.cel, 'lowestStep', 0.2, 0.9, 0.01).onChange(() => refreshGradientMap());
+  art.add(artTheme.blobShadow, 'opacity', 0, 0.8, 0.01);
+  art.add(artTheme.net, 'cordWidth', 0.004, 0.03, 0.001);
+  art.add(artTheme.trail, 'dashWidth', 0.01, 0.1, 0.005);
+  art.close();
 
   const dbg = gui.addFolder('debug');
   dbg.add(tuning.debug, 'physicsWireframe');

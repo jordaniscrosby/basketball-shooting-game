@@ -1,17 +1,17 @@
 import * as THREE from 'three';
 import { tuning } from '../config/tuning';
+import { artTheme } from '../config/artTheme';
+import { toonMaterial, seededRng } from './toon';
 
 /**
- * Basketball mesh with painted seams — the seam texture is what makes
- * backspin readable in flight.
+ * Cartoon basketball: flat orange cel with bold, slightly wobbly ink seams —
+ * the seam texture is what makes backspin readable in flight.
  */
 export function createBallMesh(): THREE.Mesh {
-  const mesh = new THREE.Mesh(
+  return new THREE.Mesh(
     new THREE.SphereGeometry(tuning.ball.radius, 48, 32),
-    new THREE.MeshStandardMaterial({ map: paintBallTexture(), roughness: 0.62 }),
+    toonMaterial({ map: paintBallTexture() }),
   );
-  mesh.castShadow = true;
-  return mesh;
 }
 
 function paintBallTexture(): THREE.CanvasTexture {
@@ -19,41 +19,44 @@ function paintBallTexture(): THREE.CanvasTexture {
   c.width = 1024;
   c.height = 512;
   const ctx = c.getContext('2d')!;
+  const rng = seededRng(0xba11);
 
-  // Pebbled leather base with slight vertical shading.
-  const grad = ctx.createLinearGradient(0, 0, 0, c.height);
-  grad.addColorStop(0, '#e06a28');
-  grad.addColorStop(0.5, '#d95f1e');
-  grad.addColorStop(1, '#c8541a');
-  ctx.fillStyle = grad;
+  ctx.fillStyle = artTheme.palette.ball;
   ctx.fillRect(0, 0, c.width, c.height);
 
-  ctx.strokeStyle = '#2b2018';
-  ctx.lineWidth = 7;
+  ctx.strokeStyle = artTheme.palette.ink;
+  ctx.lineCap = 'round';
+  const wobble = () => (rng() - 0.5) * 5;
+  const width = () => 11 * (0.8 + rng() * 0.4);
 
-  // Equator seam (v = 0.5) and two meridians (u = 0.25, 0.75 wrap at 0/0.5).
-  ctx.beginPath();
-  ctx.moveTo(0, c.height / 2);
-  ctx.lineTo(c.width, c.height / 2);
-  ctx.stroke();
+  // Equator seam (v = 0.5) and two meridians (u = 0.25, 0.75 wrap at 0/0.5),
+  // each drawn in short hand-inked segments.
+  const seamPath = (pts: Array<[number, number]>) => {
+    for (let i = 1; i < pts.length; i++) {
+      ctx.lineWidth = width();
+      ctx.beginPath();
+      ctx.moveTo(pts[i - 1]![0] + wobble(), pts[i - 1]![1] + wobble());
+      ctx.lineTo(pts[i]![0] + wobble(), pts[i]![1] + wobble());
+      ctx.stroke();
+    }
+  };
+  const horiz: Array<[number, number]> = [];
+  for (let i = 0; i <= 32; i++) horiz.push([(i / 32) * c.width, c.height / 2]);
+  seamPath(horiz);
   for (const u of [0, 0.25, 0.5, 0.75]) {
-    ctx.beginPath();
-    ctx.moveTo(u * c.width, 0);
-    ctx.lineTo(u * c.width, c.height);
-    ctx.stroke();
+    const vert: Array<[number, number]> = [];
+    for (let i = 0; i <= 16; i++) vert.push([u * c.width, (i / 16) * c.height]);
+    seamPath(vert);
   }
   // Two curved "hook" seams mirrored around the equator.
   for (const side of [-1, 1]) {
-    ctx.beginPath();
-    for (let i = 0; i <= 128; i++) {
-      const u = i / 128;
+    const pts: Array<[number, number]> = [];
+    for (let i = 0; i <= 64; i++) {
+      const u = i / 64;
       const v = 0.5 + side * (0.18 + 0.13 * Math.sin(u * Math.PI * 2));
-      const x = u * c.width;
-      const y = v * c.height;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      pts.push([u * c.width, v * c.height]);
     }
-    ctx.stroke();
+    seamPath(pts);
   }
 
   const tex = new THREE.CanvasTexture(c);

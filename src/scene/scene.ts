@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { tuning } from '../config/tuning';
+import { artTheme } from '../config/artTheme';
 
 export interface GameScene {
   scene: THREE.Scene;
@@ -11,14 +12,13 @@ export function createScene(canvas: HTMLCanvasElement): GameScene {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Cartoon pipeline: no tone curve, no shadow maps — flat cels + blob shadow.
+  renderer.shadowMap.enabled = false;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMapping = THREE.NoToneMapping;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x10131a);
-  scene.fog = new THREE.Fog(0x10131a, 30, 60);
+  scene.background = new THREE.Color(artTheme.palette.gymWall);
 
   const camera = new THREE.PerspectiveCamera(
     tuning.camera.fov,
@@ -29,22 +29,13 @@ export function createScene(canvas: HTMLCanvasElement): GameScene {
   camera.position.set(0, 1.7, 6);
   camera.lookAt(0, 2.2, -10);
 
-  // Lighting: cool ambient bed + warm key light angled like arena rigging.
-  scene.add(new THREE.HemisphereLight(0x8899bb, 0x223311, 0.55));
-  const key = new THREE.DirectionalLight(0xfff2df, 2.2);
+  // Lighting exists only to place the cel step: with three's physical light
+  // scaling, effective tone = (ambient + directional·step)/π — these values
+  // put the lit band at 1.0 and leave the gradient steps visibly banded.
+  scene.add(new THREE.AmbientLight(0xffffff, 1.35));
+  const key = new THREE.DirectionalLight(0xffffff, 1.85);
   key.position.set(6, 12, 4);
-  key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
-  key.shadow.camera.left = -12;
-  key.shadow.camera.right = 12;
-  key.shadow.camera.top = 12;
-  key.shadow.camera.bottom = -12;
-  key.shadow.camera.far = 40;
-  key.shadow.bias = -0.0004;
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0xbdd4ff, 0.5);
-  fill.position.set(-8, 6, -6);
-  scene.add(fill);
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;

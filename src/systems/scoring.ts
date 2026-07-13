@@ -32,15 +32,22 @@ export class ScoringTracker {
   private blocked = false;
   private latched = false;
   private rimTouched = false;
+  private rimContacts = 0;
   private prev: RelSample | null = null;
 
   /** Flag a rim contact this possession (from Rapier collision events). */
   markRimContact(): void {
     this.rimTouched = true;
+    this.rimContacts++;
   }
 
   get hasRimContact(): boolean {
     return this.rimTouched;
+  }
+
+  /** Rim contacts this possession — ≥3 is the "lucky roll" drama signal. */
+  get rimContactCount(): number {
+    return this.rimContacts;
   }
 
   /** Start a fresh possession (new shot). */
@@ -49,6 +56,7 @@ export class ScoringTracker {
     this.blocked = false;
     this.latched = false;
     this.rimTouched = false;
+    this.rimContacts = 0;
     this.prev = null;
   }
 

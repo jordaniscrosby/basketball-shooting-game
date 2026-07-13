@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { tuning, derived } from '../config/tuning';
+import { artTheme } from '../config/artTheme';
+import { RibbonBatch } from '../scene/inkRibbon';
+import { hash01 } from '../scene/toon';
 
 interface Particle {
   pos: THREE.Vector3;
@@ -12,12 +15,17 @@ interface Particle {
  * tapering toward the bottom like a real net. The ball pushes particles as a
  * sphere; structural constraints (rings + verticals + diagonals) snap it
  * back. Never a gameplay collider — the rim capsules own the physics.
+ *
+ * Rendered as hand-drawn cords: each constraint is an ink stroke with a
+ * paper-white core, widths slightly varied per cord.
  */
 export class VerletNet {
   private readonly particles: Particle[] = [];
   private readonly constraints: Array<[number, number, number]> = []; // a, b, restLen
-  private readonly lines: THREE.LineSegments;
-  private readonly positions: Float32Array;
+  private readonly inkBatch: RibbonBatch;
+  private readonly coreBatch: RibbonBatch;
+  private readonly camPos = new THREE.Vector3();
+  private readonly toCam = new THREE.Vector3();
   private readonly cols = tuning.juice.netCols;
   private readonly rows = tuning.juice.netRows;
 
@@ -54,16 +62,8 @@ export class VerletNet {
       }
     }
 
-    this.positions = new Float32Array(this.constraints.length * 6);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
-    this.lines = new THREE.LineSegments(
-      geo,
-      new THREE.LineBasicMaterial({ color: 0xf2f4f6, transparent: true, opacity: 0.85 }),
-    );
-    this.lines.frustumCulled = false;
-    scene.add(this.lines);
-    this.writeGeometry();
+    this.inkBatch = new RibbonBatch(scene, this.constraints.length);
+    this.coreBatch = new RibbonBatch(scene, this.constraints.length);
   }
 
   /** Fixed-step update; ballPos/ballR push the cords aside. */
@@ -118,8 +118,6 @@ export class VerletNet {
         b.pos.z -= dz * diff * wb;
       }
     }
-
-    this.writeGeometry();
   }
 
   /** Extra downward tug for the swish moment. */
@@ -129,18 +127,30 @@ export class VerletNet {
     }
   }
 
-  private writeGeometry(): void {
-    let i = 0;
-    for (const [ai, bi] of this.constraints) {
+  /** Per-render-frame: rebuild the camera-facing cord ribbons. */
+  render(camera: THREE.Camera): void {
+    camera.getWorldPosition(this.camPos);
+    this.inkBatch.begin(camera);
+    this.coreBatch.begin(camera);
+    const P = artTheme.palette;
+    for (let i = 0; i < this.constraints.length; i++) {
+      const [ai, bi] = this.constraints[i]!;
       const a = this.particles[ai]!.pos;
       const b = this.particles[bi]!.pos;
-      this.positions[i++] = a.x;
-      this.positions[i++] = a.y;
-      this.positions[i++] = a.z;
-      this.positions[i++] = b.x;
-      this.positions[i++] = b.y;
-      this.positions[i++] = b.z;
+      const w = artTheme.net.cordWidth * (1 + (hash01(i) - 0.5) * 2 * artTheme.net.cordWidthVariance);
+      this.inkBatch.quad(a.x, a.y, a.z, b.x, b.y, b.z, w * 1.9, w * 1.9, P.ink);
+      // Paper core nudged toward the camera so it always sits on the ink.
+      this.toCam
+        .subVectors(this.camPos, a)
+        .normalize()
+        .multiplyScalar(0.004);
+      this.coreBatch.quad(
+        a.x + this.toCam.x, a.y + this.toCam.y, a.z + this.toCam.z,
+        b.x + this.toCam.x, b.y + this.toCam.y, b.z + this.toCam.z,
+        w, w, P.net,
+      );
     }
-    this.lines.geometry.attributes.position!.needsUpdate = true;
+    this.inkBatch.end();
+    this.coreBatch.end();
   }
 }

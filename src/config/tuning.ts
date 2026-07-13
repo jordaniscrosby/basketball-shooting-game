@@ -120,6 +120,36 @@ export const tuning = {
     lateralMax: 0.12,
   },
 
+  curve: {
+    /** Master switch for mid-flight steering (body English). */
+    enabled: true,
+    /**
+     * Screen-x drag velocity (viewport heights/s) → lateral accel (m/s²).
+     * SOFT by design: a guide, not a joystick — the headline playtest dial.
+     */
+    lateralGain: 4.0,
+    /** Screen-y drag velocity (up) → depth accel toward/away from the hoop (m/s²). */
+    depthGain: 2.2,
+    /** Total steering Δv budget per flight (m/s). The other headline dial. */
+    budget: 1.0,
+    /** Per-step steering accel cap (m/s²). */
+    maxAccel: 6.0,
+    /**
+     * Drag must start within this distance of the ball's screen position
+     * (viewport-height units). Large value = swipe anywhere (default — touch
+     * precision on a moving ball is an open design question).
+     */
+    grabRadius: 9,
+    /** Kill steering after the first rim/board contact — rim physics stays pure. */
+    cutoffAfterContact: true,
+    /** Below this fraction of budget remaining, force fades linearly (no cutoff pop). */
+    fadeBelowFrac: 0.35,
+    /** A steer move sample steers for at most this long without a newer one (ms). */
+    commandHoldMs: 90,
+    /** Visual sidespin: extra mesh spin (rad/s) per m/s² of lateral steer accel. */
+    visualSpinGain: 0.9,
+  },
+
   spin: {
     /** Auto-backspin at perfect power (Hz, converted to rad/s at release). */
     backspinHz: 2.5,
@@ -145,14 +175,63 @@ export const tuning = {
   game: {
     /** Ball release height above the floor at the shooter position (m). */
     releaseHeight: 2.0,
-    /** Streak milestones that escalate the tier mix. */
-    heatAt: 3,
-    mixAt: 7,
-    fireAt: 10,
-    /** Every Nth shot after escalation begins, inject a lower-tier breather. */
+    /** After a miss (run reset), the next shot arrives within this (ms). */
+    continueDelayMs: 1200,
+  },
+
+  /**
+   * Linear difficulty ramp: the sampling target difficulty rises linearly
+   * with streak (capped) over the rated position pool — shots get
+   * progressively, probabilistically farther. No stepped tier cliffs; the
+   * stars announce progress, the sampling ramps smoothly underneath.
+   */
+  difficulty: {
+    /** Target difficulty at streak 0. */
+    t0: 0.12,
+    /** Target difficulty gained per streak point (the ramp slope k). */
+    perStreak: 0.045,
+    /** Ramp ceiling — a long run lives here, not beyond. */
+    cap: 0.85,
+    /** Gaussian sampling width around the target (difficulty units). */
+    sigma: 0.22,
+    /** Every Nth shot (once the ramp is underway) draws an easier breather. */
     breatherEvery: 5,
-    pointsMake: 1,
-    pointsSwish: 2,
+    breatherTarget: 0.15,
+    /** Rating map: difficulty = clamp((dist − distFloor) / distSpan, 0.05, 1). */
+    distFloor: 2.5,
+    distSpan: 8,
+  },
+
+  /**
+   * Scoring v2: points = (base + Σ bonuses) × starMultiplier. Legibility-first
+   * round numbers — a player must be able to recompute any popup in their head.
+   */
+  score: {
+    base: 50,
+    bonus: {
+      swish: 25,
+      mid: 20,
+      three: 50,
+      deep: 100,
+      bank: 20,
+      luckyRoll: 15,
+      curve: 25,
+      fullBender: 60,
+      steez: 30,
+    },
+    /** Rim contacts ≥ this on a make = LUCKY ROLL (rattle-in drama). */
+    luckyRollContacts: 3,
+    /** Lateral deviation from the unsteered ghost (m) that earns CURVE!. */
+    curveDevThreshold: 0.25,
+    /** Δv budget fraction spent that upgrades to FULL BENDER!!. */
+    benderBudgetFrac: 0.85,
+    /** Distance bands (m from rim centre): close < mid < three < deep. */
+    bandMid: 4.5,
+    bandThree: 6.5,
+    bandDeep: 8.5,
+    /** Streak milestones that earn stars; multiplier = starMultipliers[stars]. */
+    starMilestones: [3, 7, 10, 15, 20],
+    starMultipliers: [1, 2, 3, 4, 5, 6],
   },
 
   juice: {

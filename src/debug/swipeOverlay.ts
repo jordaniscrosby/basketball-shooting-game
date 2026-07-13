@@ -13,6 +13,8 @@ export class SwipeOverlay {
   private fade = 0;
   private path: PointerSample[] = [];
   private arc: THREE.Vector3[] = [];
+  private steer: { budgetFrac: number; vx: number; vy: number; bx: number; by: number } | null =
+    null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -52,9 +54,20 @@ export class SwipeOverlay {
     }
   }
 
+  /** Mid-flight steering readout: budget bar + live steer vector at the ball. */
+  showSteerState(budgetFrac: number, vx: number, vy: number, ballScreen: { x: number; y: number }): void {
+    if (!tuning.debug.swipeOverlay) return;
+    this.steer = { budgetFrac, vx, vy, bx: ballScreen.x, by: ballScreen.y };
+  }
+
+  clearSteerState(): void {
+    this.steer = null;
+  }
+
   render(dt: number, camera: THREE.Camera): void {
     const { ctx, canvas } = this;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    this.renderSteer();
     if (this.fade <= 0 || !tuning.debug.swipeOverlay) return;
     this.fade = Math.max(0, this.fade - dt);
     const alpha = Math.min(1, this.fade);
@@ -84,6 +97,41 @@ export class SwipeOverlay {
       ctx.setLineDash([]);
     }
 
+    this.renderArc(camera);
+  }
+
+  private renderSteer(): void {
+    const { ctx, canvas } = this;
+    const s = this.steer;
+    if (!s || !tuning.debug.swipeOverlay) return;
+    // Budget bar, bottom-center.
+    const bw = canvas.width * 0.22;
+    const bh = 8;
+    const bx = (canvas.width - bw) / 2;
+    const by = canvas.height - 34;
+    ctx.fillStyle = 'rgba(43, 29, 22, 0.35)';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = 'rgba(201, 86, 60, 0.95)';
+    ctx.fillRect(bx, by, bw * Math.max(0, Math.min(1, s.budgetFrac)), bh);
+    // Live steer vector from the ball.
+    const mag = Math.hypot(s.vx, s.vy);
+    if (mag > 0.02) {
+      const x0 = s.bx * canvas.width;
+      const y0 = s.by * canvas.height;
+      const x1 = x0 + s.vx * canvas.width * 0.25;
+      const y1 = y0 + s.vy * canvas.height * 0.25;
+      ctx.strokeStyle = 'rgba(201, 86, 60, 0.9)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+    }
+  }
+
+  private renderArc(camera: THREE.Camera): void {
+    const { ctx, canvas } = this;
+    const alpha = Math.min(1, this.fade);
     if (this.arc.length > 1) {
       ctx.strokeStyle = `rgba(255, 190, 80, ${0.9 * alpha})`;
       ctx.lineWidth = 2;

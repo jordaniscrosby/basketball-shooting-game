@@ -21,27 +21,37 @@ export function releaseAngularVelocity(
   return backspin.add(side);
 }
 
-/**
- * Optional per-step Magnus force F = k·(ω × v). Rapier forces PERSIST across
- * steps, so the caller must resetForces() first — this helper does both.
- */
-export function applyMagnus(body: {
+interface ForceBody {
   resetForces(wakeUp: boolean): void;
   addForce(force: { x: number; y: number; z: number }, wakeUp: boolean): void;
   angvel(): { x: number; y: number; z: number };
   linvel(): { x: number; y: number; z: number };
-}): void {
+}
+
+/**
+ * The single per-step force accumulator. Rapier forces PERSIST across steps,
+ * so exactly one owner calls resetForces() then adds everything for this
+ * step: optional Magnus F = k·(ω × v), plus the mid-flight steering force
+ * (null when the player isn't steering — that path adds nothing and stays
+ * bit-identical to the pre-curve build).
+ */
+export function applyFlightForces(
+  body: ForceBody,
+  steerForce: { x: number; y: number; z: number } | null = null,
+): void {
   body.resetForces(true);
   const k = tuning.spin.magnusK;
-  if (k <= 0) return;
-  const w = body.angvel();
-  const v = body.linvel();
-  body.addForce(
-    {
-      x: k * (w.y * v.z - w.z * v.y),
-      y: k * (w.z * v.x - w.x * v.z),
-      z: k * (w.x * v.y - w.y * v.x),
-    },
-    true,
-  );
+  if (k > 0) {
+    const w = body.angvel();
+    const v = body.linvel();
+    body.addForce(
+      {
+        x: k * (w.y * v.z - w.z * v.y),
+        y: k * (w.z * v.x - w.x * v.z),
+        z: k * (w.x * v.y - w.y * v.x),
+      },
+      true,
+    );
+  }
+  if (steerForce) body.addForce(steerForce, true);
 }

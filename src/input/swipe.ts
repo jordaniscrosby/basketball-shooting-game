@@ -18,6 +18,18 @@ export interface SwipeCallbacks {
   onCancel?: () => void;
   /** Live feedback during the drag (overlay). */
   onMove?: (samples: readonly PointerSample[]) => void;
+  /**
+   * When this returns true at pointer-down, the drag becomes a free-direction
+   * steer drag (mid-flight curve) instead of an aim gesture. The aiming
+   * validation path is untouched.
+   */
+  steerActive?: () => boolean;
+  /** Gate a steer drag by its start point (grab radius around the ball). */
+  steerGrabCheck?: (x: number, y: number) => boolean;
+  /** Live per-move steer sample: drag velocity in viewport fractions/s. */
+  onSteer?: (vx: number, vy: number) => void;
+  /** The steer drag lifted or was cancelled. */
+  onSteerEnd?: () => void;
 }
 
 /**
@@ -29,6 +41,7 @@ export interface SwipeCallbacks {
 export class SwipeInput {
   private samples: PointerSample[] = [];
   private active = false;
+  private steering = false;
   private pointerId = -1;
   enabled = true;
 
@@ -53,9 +66,20 @@ export class SwipeInput {
 
   private readonly onDown = (e: PointerEvent): void => {
     if (!this.enabled || this.active) return;
+    const steer = this.cb.steerActive?.() ?? false;
+    if (steer) {
+      const x = e.clientX / window.innerWidth;
+      const y = e.clientY / window.innerHeight;
+      if (this.cb.steerGrabCheck && !this.cb.steerGrabCheck(x, y)) return;
+    }
     this.active = true;
+    this.steering = steer;
     this.pointerId = e.pointerId;
-    this.el.setPointerCapture(e.pointerId);
+    try {
+      this.el.setPointerCapture(e.pointerId);
+    } catch {
+      // Capture can fail for exotic/synthetic pointers — tracking still works.
+    }
     this.samples = [];
     this.push(e);
   };
@@ -63,6 +87,13 @@ export class SwipeInput {
   private readonly onMove = (e: PointerEvent): void => {
     if (!this.active || e.pointerId !== this.pointerId) return;
     this.push(e);
+    if (this.steering) {
+      // Live velocity of the drag tail — the ball answers the finger now,
+      // not at release.
+      const v = estimateVelocity(this.samples);
+      this.cb.onSteer?.(v.vx, v.vy);
+      return;
+    }
     this.cb.onMove?.(this.samples);
   };
 
@@ -70,7 +101,16 @@ export class SwipeInput {
     if (!this.active || e.pointerId !== this.pointerId) return;
     this.push(e);
     this.active = false;
-    this.el.releasePointerCapture(e.pointerId);
+    try {
+      this.el.releasePointerCapture(e.pointerId);
+    } catch {
+      // Mirror of setPointerCapture above.
+    }
+    if (this.steering) {
+      this.steering = false;
+      this.cb.onSteerEnd?.();
+      return;
+    }
     const g = this.evaluate();
     if (g) this.cb.onGesture(g);
     else this.cb.onCancel?.();
@@ -79,6 +119,11 @@ export class SwipeInput {
   private readonly onCancelEvt = (e: PointerEvent): void => {
     if (!this.active || e.pointerId !== this.pointerId) return;
     this.active = false;
+    if (this.steering) {
+      this.steering = false;
+      this.cb.onSteerEnd?.();
+      return;
+    }
     this.cb.onCancel?.();
   };
 
