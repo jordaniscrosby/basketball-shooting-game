@@ -15,6 +15,30 @@ npm run dev       # http://localhost:5173
 - `npm run verify` — typecheck + unit tests (incl. the physics shot battery) + build.
 - `node scripts/genAudio.mjs` — regenerate the placeholder SFX WAVs.
 
+## Play on your phone (LAN)
+
+No nginx/proxy needed — Vite serves on the LAN directly:
+
+```sh
+npm run dev -- --host   # then open http://<your-LAN-IP>:5173 on the phone
+```
+
+Vite prints the network URLs on startup (the `192.168.x.x` one is your Wi‑Fi).
+Hot reload works over LAN. One-time setup on Windows — allow the port through
+the firewall (elevated terminal); required especially when the Wi‑Fi network
+profile is **Public**, which blocks all inbound by default:
+
+```powershell
+New-NetFirewallRule -DisplayName "Vite dev 5173" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow -Profile Any
+```
+
+Gotchas:
+- **VPN (e.g. NordVPN)** on either device can drop inbound LAN traffic — enable
+  its "LAN discovery"/allow-local-network setting or disconnect it.
+- Phone and PC must be on the same Wi‑Fi.
+- Off-network alternative: `npx localtunnel --port 5173` (or `cloudflared`)
+  gives a public HTTPS URL, bypassing LAN/firewall entirely.
+
 ## How it works
 
 - **Fixed 60 Hz timestep** (`core/loop.ts`) with render interpolation; deterministic,

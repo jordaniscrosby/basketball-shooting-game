@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```sh
 npm run dev          # Vite dev server at http://localhost:5173
+npm run dev -- --host   # expose on LAN for phone testing (no nginx needed) — see README "Play on your phone" for firewall/VPN gotchas
 npm run verify       # tsc --noEmit && vitest run && vite build — run before committing
 npm run test         # vitest run (all tests)
 npx vitest run src/systems/aim.test.ts        # single test file
