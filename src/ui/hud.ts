@@ -108,10 +108,12 @@ class SegmentCell {
 }
 
 /**
- * DOM HUD: the two-panel scoreboard (Balatro-style — bare seven-segment
- * streak and points numbers, no labels; heat is shown, never said) and the
- * deliberately-opened stats screen (leaderboard + career stats).
- * Score math receipts live on the comic FX layer, not here.
+ * DOM HUD: the Balatro-style split scoreboard — one dark panel, blue chips
+ * half (run score) × red mult half (streak), white seven-segment digits, no
+ * labels. Heat is shown, never said: it lights comic flame tongues behind
+ * the panel and scales/jitters the digits. Also owns the deliberately-opened
+ * stats screen (leaderboard + career stats). Score math receipts live on the
+ * comic FX layer, not here.
  */
 export class Hud {
   private readonly scoreboard = document.getElementById('scoreboard')!;
@@ -129,6 +131,26 @@ export class Hud {
     document.getElementById('stats-btn')!.addEventListener('click', onToggleStats);
     document.getElementById('retry-btn')!.addEventListener('click', onToggleStats);
     this.controlsBtn.addEventListener('click', onToggleControls);
+    this.buildFlames();
+  }
+
+  /** Comic flame tongues behind the panel (Balatro fire) — heat classes on
+   *  #scoreboard drive their size/visibility in hud.css. Deterministic
+   *  per-index variation, no RNG (same flames every boot). */
+  private buildFlames(): void {
+    const root = document.getElementById('sb-fire')!;
+    const n = artTheme.hud.flameCount;
+    for (let i = 0; i < n; i++) {
+      const flame = document.createElement('i');
+      flame.className = 'flame';
+      flame.style.left = `${((i + 0.5) / n) * 100}%`;
+      flame.style.animationDelay = `${-((i * 0.173) % 0.5)}s`;
+      flame.style.setProperty(
+        '--flame-scale',
+        (0.65 + 0.45 * Math.abs(Math.sin(i * 2.399))).toFixed(3),
+      );
+      root.appendChild(flame);
+    }
   }
 
   setControlMode(mode: ControlMode): void {

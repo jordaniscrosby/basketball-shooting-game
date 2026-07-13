@@ -27,14 +27,18 @@ export const artTheme = {
     grassDark: '#6ca254',
     hillFar: '#a9d18a',
     trail: '#dbcfb2',
-    benchWood: '#a97a45',
     treeLeaf: '#4f8f43',
     treeTrunk: '#7d5433',
-    cowMuzzle: '#e2a58c',
     /** Paper/cream — UI cards, floor apron. */
     paper: '#f8f2e2',
     star: '#f7c948',
     fire: '#e8542f',
+    /** Balatro-style scoreboard: dark slate panel, blue chips half (points) ×
+     *  red mult half (streak), white digits. Color IS the split's meaning. */
+    sbPanel: '#2e3440',
+    sbChips: '#3d84c6',
+    sbMult: '#d94f3d',
+    sbDigit: '#ffffff',
   },
 
   /**
@@ -77,6 +81,10 @@ export const artTheme = {
     heatScaleSuperstar: 1.09,
     /** Superstar digit jitter amplitude (px), stepped chunky — comic, not vibration. */
     igniteJitterPx: 1.2,
+    /** Balatro fire: comic flame tongues behind the scoreboard, lit by heat.
+     *  Count of flame elements and their height (em, at full fire). */
+    flameCount: 10,
+    flameEm: 1.4,
   },
 
   /**
@@ -112,8 +120,6 @@ export const artTheme = {
     rim: 0.007,
     board: 0.016,
     pole: 0.014,
-    /** Park props: bench, cow. */
-    prop: 0.01,
   },
 
   boil: {

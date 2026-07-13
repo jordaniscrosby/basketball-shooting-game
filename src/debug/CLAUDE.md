@@ -11,7 +11,7 @@
 The live-tune → commit loop for `artTheme`: persists the **diff-from-defaults** to localStorage (`streak.artThemeOverrides.v1`), re-applied by `applySavedTheme()` first thing in boot() (before anything paints). `copyThemeDiff()` puts the diff JSON on the clipboard for committing back into `artTheme.ts`. Pristine defaults are `structuredClone`d at module import — which runs before boot merges overrides, so the diff stays stable.
 
 ## artReview.ts
-Art-review mode: `?art=ball|hoop|wide|court|bench|cow|backdrop` gives reproducible screenshots for art iteration — pins the ball at free throw (`positions[0]`), freezes the boil (`rateHz = 0`), hides HUD + panel (`body.art-review`, rule in `ui/hud.css`), parks the camera at a fixed pose (main.ts skips `rig.update`). Poses are dev chrome, outside artTheme; bench/cow poses mirror the prop positions hardcoded in `court.buildParkProps`. Workflow doc: vault "Basketball Shooting Game/Art Assets & Workflow".
+Art-review mode: `?art=ball|hoop|wide|court|backdrop` gives reproducible screenshots for art iteration — pins the ball at free throw (`positions[0]`), freezes the boil (`rateHz = 0`), hides HUD + panel (`body.art-review`, rule in `ui/hud.css`), parks the camera at a fixed pose (main.ts skips `rig.update`). Poses are dev chrome, outside artTheme. Workflow doc: vault "Basketball Shooting Game/Art Assets & Workflow".
 
 ## physicsDebug.ts
 `class PhysicsDebugRenderer(scene)` — renders Rapier `world.debugRender()` as LineSegments (renderOrder 999, depthTest off), gated by `tuning.debug.physicsWireframe`. Called every render tick; cheap when off.

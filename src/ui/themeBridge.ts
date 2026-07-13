@@ -16,6 +16,10 @@ export function applyThemeToCss(): void {
   s.setProperty('--accent', P.courtAccent);
   s.setProperty('--fire', P.fire);
   s.setProperty('--star', P.star);
+  s.setProperty('--sb-panel', P.sbPanel);
+  s.setProperty('--sb-chips', P.sbChips);
+  s.setProperty('--sb-mult', P.sbMult);
+  s.setProperty('--sb-digit', P.sbDigit);
   s.setProperty('--grain-opacity', String(artTheme.grainOpacity));
   const S = artTheme.score;
   s.setProperty('--score-base', S.base);
@@ -28,5 +32,6 @@ export function applyThemeToCss(): void {
   s.setProperty('--sb-heat-scale-fire', String(artTheme.hud.heatScaleFire));
   s.setProperty('--sb-heat-scale-superstar', String(artTheme.hud.heatScaleSuperstar));
   s.setProperty('--sb-ignite-px', `${artTheme.hud.igniteJitterPx}px`);
+  s.setProperty('--sb-flame-em', `${artTheme.hud.flameEm}em`);
   s.setProperty('--swirl-screen-alpha', String(artTheme.swirl.screenAlpha));
 }

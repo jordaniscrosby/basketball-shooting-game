@@ -27,9 +27,11 @@
   --score-bonus: #c9563c;
   --score-mult: #f7c948;
   --score-total: #e8542f;
-  /* Scoreboard: white panel, near-black hand-drawn segments. */
-  --sb-ink: #0a0a0a;
-  --sb-paper: #ffffff;
+  /* Scoreboard: Balatro split — dark panel, blue chips × red mult, white digits. */
+  --sb-panel: #2e3440;
+  --sb-chips: #3d84c6;
+  --sb-mult: #d94f3d;
+  --sb-digit: #ffffff;
 }
 
 * {
@@ -93,21 +95,25 @@ body {
   box-shadow: 3px 4px 0 rgba(43, 29, 22, 0.35);
 }
 
-/* ── Scoreboard: two hand-drawn panels, numbers only (Balatro-style) ──
-   Streak panel left, points panel right — no labels, no chips; meaning comes
-   from position and heat color. Digits are built by ui/hud.ts (SegmentCell):
-   each .seg-digit holds seven <i class="seg seg-a…g"> bars; unlit bars stay
-   faintly visible like a real LCD, .lit bars go full ink. Wobbly
-   skews/rotations sell the hand-drawn look. */
+/* ── Scoreboard: Balatro split panel ──
+   One dark slate panel, two inset halves: blue chips (run score) × red mult
+   (streak). Digits are built by ui/hud.ts (SegmentCell): each .seg-digit
+   holds seven <i class="seg seg-a…g"> bars in white; unlit bars stay faintly
+   visible like a real LCD. Heat never recolors the digits — it sets the
+   board on FIRE (.sb-fire comic flame tongues behind the panel, --flame-heat
+   per tier) and scales/jitters the numbers. Wobbly skews/rotations sell the
+   hand-drawn look. */
 
 #scoreboard {
   position: absolute;
+  /* Same inset vertically as horizontally — the flame tongues may kiss the
+     top screen edge at full heat, which reads fine. */
   top: 14px;
   left: 14px;
-  display: flex;
-  align-items: stretch;
-  gap: 12px;
-  color: var(--sb-ink);
+  font-size: clamp(1.7rem, 5.6vw, 2.5rem);
+  color: var(--sb-digit);
+  /* Flame size per heat tier: none → warm embers → fire → superstar blaze. */
+  --flame-heat: 0;
 }
 
 /* Idle motion — nothing on screen is ever fully still. Animates the
@@ -122,60 +128,166 @@ body {
   50% { rotate: calc(var(--sb-breathe-deg, 0.5deg) * 0.5); }
 }
 
-.sb-cell {
+.sb-panel {
+  position: relative;
+  z-index: 1; /* above the .sb-fire flame roots */
+  display: flex;
+  align-items: stretch;
+  gap: 0.14em;
+  background: var(--sb-panel);
+  border: 3px solid var(--ink);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  box-shadow: 3px 4px 0 rgba(20, 20, 20, 0.25);
+  padding: 0.18em 0.22em;
+  transform: rotate(-0.6deg);
+  animation: sb-breathe var(--sb-breathe-sec, 4.5s) ease-in-out infinite;
+  transition: box-shadow 0.4s ease;
+}
+
+/* The two colored halves — inset chips on the dark panel, mirrored wobbly
+   radii so they read as two stickers, not one widget. */
+.sb-half {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--sb-paper);
-  border: 3px solid var(--sb-ink);
-  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
-  box-shadow: 3px 4px 0 rgba(20, 20, 20, 0.25);
-  padding: 0.5em 0.8em 0.45em;
-  transform: rotate(-0.6deg);
-  animation: sb-breathe var(--sb-breathe-sec, 4.5s) ease-in-out infinite;
+  padding: 0.3em 0.34em 0.26em;
+  border: 2px solid rgba(10, 10, 10, 0.5);
 }
 
-/* Second panel: mirrored radii + offset breathe so the pair never moves in
-   lockstep — two stickers slapped on the glass, not one widget. */
-.sb-cell + .sb-cell {
-  border-radius: 15px 225px 15px 255px / 255px 15px 225px 15px;
-  transform: rotate(0.6deg);
-  animation-delay: -2.2s;
+.sb-chips {
+  background: var(--sb-chips);
+  border-radius: 200px 12px 180px 12px / 12px 180px 12px 200px;
+  transform: rotate(-0.4deg);
+}
+
+.sb-mult {
+  background: var(--sb-mult);
+  border-radius: 12px 180px 12px 200px / 200px 12px 180px 12px;
+  transform: rotate(0.5deg);
+}
+
+/* The × between chips and mult — Bangers, fire red, slightly cocked. */
+.sb-x {
+  align-self: center;
+  font-family: 'Bangers', cursive;
+  font-size: 0.9em;
+  line-height: 1;
+  padding: 0 0.04em;
+  color: var(--fire);
+  transform: rotate(-4deg);
+  text-shadow: 0.045em 0.055em 0 rgba(10, 10, 10, 0.65);
 }
 
 .sb-digits {
   display: flex;
   align-items: center;
-  font-size: clamp(1.7rem, 5.6vw, 2.5rem);
+  font-size: 1em;
   line-height: 1;
-  color: var(--sb-ink);
-  transition: color 0.4s ease, scale 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  color: var(--sb-digit);
+  transition: scale 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Escalation theater — the run heats up and the typography renders it:
-   amber → fire digits GROW + glow → superstar grows more, hue-cycles, and
+/* ── Balatro fire: comic flame tongues licking up from behind the panel.
+   Elements built by ui/hud.ts (buildFlames); roots hide behind the panel
+   (z-index below .sb-panel). Chunky steps() flicker — comic fire, not a
+   smooth particle sim. Per-flame size lives in --flame-scale (inline),
+   per-tier intensity in --flame-heat (heat classes below). */
+.sb-fire {
+  position: absolute;
+  z-index: 0;
+  top: 2px;
+  left: 8%;
+  right: 8%;
+  height: 0;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+#scoreboard.heat-warm .sb-fire,
+#scoreboard.heat-fire .sb-fire,
+#scoreboard.heat-superstar .sb-fire {
+  opacity: 1;
+}
+
+#scoreboard.heat-warm { --flame-heat: 0.45; }
+#scoreboard.heat-fire { --flame-heat: 1; }
+#scoreboard.heat-superstar { --flame-heat: 1.2; }
+
+.sb-fire .flame {
+  position: absolute;
+  bottom: -0.5em;
+  width: 0.55em;
+  height: var(--sb-flame-em, 1.3em);
+  margin-left: -0.28em;
+  background: linear-gradient(to top, var(--fire) 20%, var(--star) 95%);
+  border-radius: 50% 50% 44% 44% / 76% 76% 24% 24%;
+  transform-origin: 50% 100%;
+  scale: calc(var(--flame-scale, 1) * var(--flame-heat, 0));
+  transition: scale 0.35s ease;
+  animation: flame-lick 0.55s steps(3, end) infinite;
+}
+
+/* Hot gold core inside each tongue. */
+.sb-fire .flame::after {
+  content: '';
+  position: absolute;
+  left: 24%;
+  right: 24%;
+  bottom: 6%;
+  height: 52%;
+  background: var(--star);
+  border-radius: inherit;
+}
+
+@keyframes flame-lick {
+  0%, 100% { transform: scaleY(1) skewX(0deg); }
+  30% { transform: scaleY(0.76) scaleX(0.9) skewX(4deg); }
+  65% { transform: scaleY(1.14) skewX(-5deg); }
+}
+
+/* At superstar the fire burns WHITE-HOT and licks faster — the digits stay
+   white (hue-rotating orange just reads green, never rainbow). */
+#scoreboard.heat-superstar .sb-fire .flame {
+  animation-duration: 0.38s;
+  background: linear-gradient(to top, var(--fire) 10%, var(--star) 65%, var(--paper) 96%);
+}
+
+/* Escalation theater — the run heats up and the board renders it: warm
+   embers glow → fire digits GROW + panel blazes → superstar grows more and
    jitters chunky (steps(1) — comic ignition, not smooth vibration). */
-#scoreboard.heat-warm .sb-digits {
-  color: #e08b00;
+#scoreboard.heat-warm .sb-panel {
+  box-shadow:
+    3px 4px 0 rgba(20, 20, 20, 0.25),
+    0 0 0.45em color-mix(in srgb, var(--fire) 45%, transparent);
+}
+
+#scoreboard.heat-fire .sb-panel {
+  box-shadow:
+    3px 4px 0 rgba(20, 20, 20, 0.25),
+    0 0 0.9em color-mix(in srgb, var(--fire) 65%, transparent);
 }
 
 #scoreboard.heat-fire .sb-digits {
-  color: var(--fire);
   scale: var(--sb-heat-scale-fire, 1.04);
   animation: digit-glow 1.4s ease-in-out infinite;
 }
 
+#scoreboard.heat-superstar .sb-panel {
+  box-shadow:
+    3px 4px 0 rgba(20, 20, 20, 0.25),
+    0 0 1.3em color-mix(in srgb, var(--fire) 80%, transparent);
+}
+
 #scoreboard.heat-superstar .sb-digits {
-  color: var(--fire);
   scale: var(--sb-heat-scale-superstar, 1.09);
   animation:
-    hue-cycle 1.6s linear infinite,
+    digit-glow 1.1s ease-in-out infinite,
     digit-ignite 0.32s steps(1, end) infinite;
 }
 
 @keyframes digit-glow {
   0%, 100% { filter: drop-shadow(0 0 0 transparent); }
-  50% { filter: drop-shadow(0 0 0.12em color-mix(in srgb, var(--fire) 75%, transparent)); }
+  50% { filter: drop-shadow(0 0 0.12em color-mix(in srgb, var(--star) 80%, transparent)); }
 }
 
 @keyframes digit-ignite {
@@ -183,11 +295,6 @@ body {
   25% { translate: var(--sb-ignite-px, 1.2px) calc(var(--sb-ignite-px, 1.2px) * -0.5); }
   50% { translate: calc(var(--sb-ignite-px, 1.2px) * -0.8) calc(var(--sb-ignite-px, 1.2px) * 0.4); }
   75% { translate: calc(var(--sb-ignite-px, 1.2px) * 0.5) calc(var(--sb-ignite-px, 1.2px) * 0.7); }
-}
-
-@keyframes hue-cycle {
-  from { filter: hue-rotate(0deg); }
-  to { filter: hue-rotate(360deg); }
 }
 
 .seg-digit {
@@ -208,7 +315,7 @@ body {
 .seg {
   position: absolute;
   background: currentColor;
-  opacity: 0.09;
+  opacity: 0.18;
   border-radius: 0.05em;
   transition: opacity 0.06s linear;
 }
@@ -262,17 +369,16 @@ body {
   100% { scale: 1; }
 }
 
-/* Mobile: panels spread across the top edge, streak left / points right. */
+/* Mobile: the single split panel sits centered along the top edge. */
 @media (max-width: 640px) {
   #scoreboard {
-    top: 10px;
-    left: 10px;
-    right: 10px;
-    justify-content: space-between;
+    top: 14px;
+    left: 50%;
+    translate: -50% 0;
   }
 
-  .sb-cell {
-    padding: 0.4em 0.7em 0.35em;
+  .sb-half {
+    padding: 0.24em 0.28em 0.2em;
   }
 }
 

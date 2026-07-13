@@ -206,8 +206,6 @@ export function createDebugPanel(hooks: PanelHooks): GUI {
     'Ink outline width on the backboard (m).');
   tip(outline.add(artTheme.outline, 'pole', 0, 0.03, 0.001),
     'Ink outline width on the stanchion pole and arm (m).');
-  tip(outline.add(artTheme.outline, 'prop', 0, 0.03, 0.001),
-    'Ink outline width on park props — bench, cow (m).');
   tip(outline.add(artTheme.cel, 'steps', 2, 5, 1),
     'Cel-shading bands in the toon gradient. The gradient texture is sized at startup — apply to see.');
   tip(outline.add(artTheme.boil, 'variants', 2, 5, 1),
@@ -237,6 +235,10 @@ export function createDebugPanel(hooks: PanelHooks): GUI {
     'Digit scale at superstar.');
   tip(hudDials.add(artTheme.hud, 'igniteJitterPx', 0, 4, 0.1).onChange(applyThemeToCss),
     'Superstar digit jitter amplitude (px) — chunky comic ignition.');
+  tip(hudDials.add(artTheme.hud, 'flameEm', 0.5, 3, 0.05).onChange(applyThemeToCss),
+    'Scoreboard flame tongue height (em) at full fire.');
+  tip(hudDials.add(artTheme.hud, 'flameCount', 4, 20, 1),
+    'Flame tongues behind the scoreboard — built at boot, reload to see.');
   hudDials.close();
 
   const shakeDials = art.addFolder('shake (live)');

@@ -20,11 +20,15 @@
     <canvas id="fx-overlay"></canvas>
     <div id="hud">
       <div id="scoreboard">
-        <div class="sb-cell">
-          <div class="sb-digits" id="streak-count"></div>
-        </div>
-        <div class="sb-cell sb-points">
-          <div class="sb-digits" id="run-score"></div>
+        <div class="sb-fire" id="sb-fire" aria-hidden="true"></div>
+        <div class="sb-panel">
+          <div class="sb-half sb-chips">
+            <div class="sb-digits" id="run-score"></div>
+          </div>
+          <div class="sb-x">&times;</div>
+          <div class="sb-half sb-mult">
+            <div class="sb-digits" id="streak-count"></div>
+          </div>
         </div>
       </div>
       <button id="stats-btn">stats</button>

@@ -78,7 +78,7 @@ Each directory has its own CLAUDE.md with per-file detail. Read the one for the 
 ## Art asset workflow
 
 - Authored PNG texture overrides live in `public/art/` (slot spec: `public/art/README.md`) — hand-authored files, **never generate or overwrite them**. Loader: `src/scene/artAssets.ts`, procedural fallback per slot.
-- `?art=ball|hoop|wide|court|bench|cow|backdrop` = art-review mode: fixed camera, frozen boil, no HUD — reproducible screenshots for before/after art comparison (`src/debug/artReview.ts`).
+- `?art=ball|hoop|wide|court|backdrop` = art-review mode: fixed camera, frozen boil, no HUD — reproducible screenshots for before/after art comparison (`src/debug/artReview.ts`).
 - Live theme tuning: debug panel art folder → "apply theme (save + reload)" persists edits locally; "copy theme JSON" exports the diff to commit into `artTheme.ts` (`src/debug/themeStore.ts`).
 - Process doc: vault "Basketball Shooting Game/Art Assets & Workflow".
 

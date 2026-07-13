@@ -9,8 +9,7 @@ import { artTheme } from '../config/artTheme';
  * the same preset are pixel-comparable.
  *
  * Poses are dev chrome, deliberately outside artTheme (same rule as the
- * swipe overlay's colors). bench/cow poses mirror the prop positions
- * hardcoded in scene/court.buildParkProps.
+ * swipe overlay's colors).
  */
 
 export const ART_REVIEW_PRESETS = [
@@ -18,8 +17,6 @@ export const ART_REVIEW_PRESETS = [
   'hoop',
   'wide',
   'court',
-  'bench',
-  'cow',
   'backdrop',
 ] as const;
 
@@ -55,8 +52,6 @@ export function applyArtReview(
     hoop: { eye: [1.9, rimCenter.y + 0.45, rz + 3.2], look: [rimCenter.x, rimCenter.y, rz] },
     wide: { eye: [0, 4.2, rz + 20], look: [0, 2.4, rz] },
     court: { eye: [0, 13, rz + 7.5], look: [0, 0, rz + 3] },
-    bench: { eye: [-8.0, 1.4, -9.4], look: [-10.6, 0.55, -11.2] },
-    cow: { eye: [8.2, 1.5, -12.2], look: [10.5, 1.0, -14.2] },
     backdrop: { eye: [0, 2.2, 4], look: [0, 7.5, -28] },
   };
   const p = poses[preset];

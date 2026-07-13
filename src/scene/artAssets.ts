@@ -16,7 +16,6 @@ export const ART_SLOTS = [
   'backboard',
   'grass',
   'backdrop',
-  'cow-hide',
 ] as const;
 
 export type ArtSlot = (typeof ART_SLOTS)[number];
@@ -24,7 +23,7 @@ export type ArtOverrides = Partial<Record<ArtSlot, THREE.CanvasTexture>>;
 
 async function loadSlot(slot: ArtSlot): Promise<THREE.CanvasTexture | null> {
   try {
-    const res = await fetch(`/art/${slot}.png`);
+    const res = await fetch(`${import.meta.env.BASE_URL}art/${slot}.png`);
     if (!res.ok || !(res.headers.get('content-type') ?? '').startsWith('image/')) return null;
     const bmp = await createImageBitmap(await res.blob());
     // Draw onto a canvas so overrides go through the exact same texture

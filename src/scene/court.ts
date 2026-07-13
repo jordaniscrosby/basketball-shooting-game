@@ -11,8 +11,6 @@ export interface CourtVisual {
   backboardMesh: THREE.Mesh;
   poleMesh: THREE.Mesh;
   armMesh: THREE.Mesh;
-  /** Park props (bench, cow) that want ink outlines like the hoop hardware. */
-  propMeshes: THREE.Mesh[];
   /** Swap pre-baked jittered texture variants — the court's line boil. */
   applyBoilFrame(frame: number): void;
 }
@@ -20,9 +18,9 @@ export interface CourtVisual {
 /**
  * Hand-drawn cartoon court dropped into a rural country park: flat fills,
  * markings as wobbly jittered ink polylines (pre-baked variants cycled for
- * line boil), grass lawn with paved trails, painted countryside backdrop,
- * a bench and a cow. Visual hoop stays aligned to the procedural colliders —
- * both read the same tuning values.
+ * line boil), grass lawn with paved trails, painted countryside backdrop.
+ * Visual hoop stays aligned to the procedural colliders — both read the same
+ * tuning values.
  *
  * Every painted texture has an authored-override slot (see artAssets.ts):
  * an override replaces the procedural painting AND its boil variants (an
@@ -62,9 +60,6 @@ export function createCourt(scene: THREE.Scene, art: ArtOverrides = {}): CourtVi
   const backdrop = buildBackdrop(art['backdrop']);
   group.add(backdrop);
 
-  const props = buildParkProps(art);
-  group.add(props.group);
-
   const hoop = buildHoopVisual(boardVariants, boardOverride);
   group.add(hoop.group);
 
@@ -75,7 +70,6 @@ export function createCourt(scene: THREE.Scene, art: ArtOverrides = {}): CourtVi
     backboardMesh: hoop.board,
     poleMesh: hoop.pole,
     armMesh: hoop.arm,
-    propMeshes: props.outlined,
     applyBoilFrame(frame: number) {
       const i = frame % artTheme.boil.variants;
       if (!floorOverride) floorMat.map = floorVariants[i]!;
@@ -476,127 +470,6 @@ function paintTrail(
       rng, 2, 1.5, P.ink,
     );
   }
-}
-
-/** Park furniture + livestock: a bench facing the court and a grazing cow. */
-function buildParkProps(art: ArtOverrides): { group: THREE.Group; outlined: THREE.Mesh[] } {
-  const group = new THREE.Group();
-  const outlined: THREE.Mesh[] = [];
-  const P = artTheme.palette;
-
-  // Wooden bench on the lawn beside the court, angled toward the action.
-  const bench = new THREE.Group();
-  const wood = () => toonMaterial({ color: P.benchWood });
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.07, 0.5), wood());
-  seat.position.set(0, 0.46, 0);
-  const back = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.5, 0.06), wood());
-  back.position.set(0, 0.78, -0.26);
-  back.rotation.x = -0.13;
-  bench.add(seat, back);
-  outlined.push(seat, back);
-  for (const sx of [-0.72, 0.72]) {
-    const leg = new THREE.Mesh(
-      new THREE.BoxGeometry(0.09, 0.46, 0.46),
-      toonMaterial({ color: P.pole }),
-    );
-    leg.position.set(sx, 0.23, 0);
-    bench.add(leg);
-  }
-  bench.position.set(-10.6, 0, -11.2);
-  bench.rotation.y = Math.PI / 2 - 0.35;
-  group.add(bench);
-
-  // The resident cow, grazing on the lawn between the court and the trail.
-  const cow = buildCow(outlined, art['cow-hide']);
-  cow.position.set(10.5, 0, -14.2);
-  cow.rotation.y = -Math.PI / 3;
-  group.add(cow);
-
-  return { group, outlined };
-}
-
-/** Boxy cartoon cow: spotted hide texture, pink muzzle, ink hooves. */
-function buildCow(outlined: THREE.Mesh[], hideOverride?: THREE.CanvasTexture): THREE.Group {
-  const g = new THREE.Group();
-  const P = artTheme.palette;
-  const white = () => toonMaterial({ color: P.paper });
-  const inkMat = () => toonMaterial({ color: P.ink });
-
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(1.55, 0.85, 0.8),
-    toonMaterial({ map: hideOverride ?? paintCowHide(0xc0ffee) }),
-  );
-  body.position.set(0, 1.0, 0);
-  g.add(body);
-  outlined.push(body);
-
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.46, 0.4), white());
-  head.position.set(0.95, 1.32, 0);
-  g.add(head);
-  outlined.push(head);
-
-  const muzzle = new THREE.Mesh(
-    new THREE.BoxGeometry(0.18, 0.24, 0.34),
-    toonMaterial({ color: P.cowMuzzle }),
-  );
-  muzzle.position.set(1.18, 1.22, 0);
-  g.add(muzzle);
-
-  for (const s of [-1, 1] as const) {
-    const ear = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.2), white());
-    ear.position.set(0.92, 1.5, s * 0.28);
-    ear.rotation.x = s * 0.5;
-    g.add(ear);
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), inkMat());
-    eye.position.set(1.13, 1.4, s * 0.12);
-    g.add(eye);
-    for (const fx of [-0.55, 0.55]) {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 10), white());
-      leg.position.set(fx, 0.31, s * 0.26);
-      g.add(leg);
-      const hoof = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.09, 0.1, 10), inkMat());
-      hoof.position.set(fx, 0.05, s * 0.26);
-      g.add(hoof);
-    }
-  }
-
-  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.02, 0.55, 6), white());
-  tail.position.set(-0.85, 1.0, 0);
-  tail.rotation.z = 0.35;
-  g.add(tail);
-
-  return g;
-}
-
-/** Holstein hide: paper base with irregular ink patches. */
-function paintCowHide(seed: number): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = 256;
-  c.height = 256;
-  const ctx = c.getContext('2d')!;
-  const rng = seededRng(seed);
-  ctx.fillStyle = artTheme.palette.paper;
-  ctx.fillRect(0, 0, 256, 256);
-  ctx.fillStyle = artTheme.palette.ink;
-  for (let k = 0; k < 6; k++) {
-    const cx = 30 + rng() * 196;
-    const cy = 30 + rng() * 196;
-    const r = 22 + rng() * 26;
-    ctx.beginPath();
-    for (let i = 0; i <= 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      const rr = r * (0.55 + rng() * 0.7);
-      const mx = cx + Math.cos(a) * rr;
-      const my = cy + Math.sin(a) * rr;
-      if (i === 0) ctx.moveTo(mx, my);
-      else ctx.lineTo(mx, my);
-    }
-    ctx.closePath();
-    ctx.fill();
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
 }
 
 /** Backboard face: paper fill, wobbly ink border + shooter's square. */

@@ -135,7 +135,6 @@ async function boot(): Promise<void> {
   boiler.outline(court.backboardMesh, artTheme.outline.board);
   boiler.outline(court.poleMesh, artTheme.outline.pole);
   boiler.outline(court.armMesh, artTheme.outline.pole);
-  for (const mesh of court.propMeshes) boiler.outline(mesh, artTheme.outline.prop);
   const blobShadow = new BlobShadow(scene);
   boiler.onCycle((f) => {
     court.applyBoilFrame(f);
