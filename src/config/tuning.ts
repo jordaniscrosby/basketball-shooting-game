@@ -269,6 +269,13 @@ export const tuning = {
     trailLength: 24,
     slowMoScale: 1.0, // reserved for v1.1 milestones
     audioVolume: 0.9,
+    /** Score-receipt audio: each term ticks at rising pitch (playbackRate
+     *  1 + step·tickPitchStep ≈ 2 semitones/step), the ×mult gets a distinct
+     *  ding, the total a bass thump — scoring should SOUND like climbing. */
+    tickPitchStep: 0.12,
+    tickVolume: 0.5,
+    multHitVolume: 0.8,
+    bassHitVolume: 0.9,
   },
 
   debug: {

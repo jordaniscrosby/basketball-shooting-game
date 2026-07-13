@@ -155,6 +155,56 @@ for (let variant = 0; variant < 3; variant++) {
   writeWav(`swish${variant + 1}.wav`, s);
 }
 
+// --- receipt tick: short woodblock-ish click, pitched up at play time
+//     (audio.ts playTick raises playbackRate per receipt term)
+{
+  const len = secs(0.07);
+  const s = new Float64Array(len);
+  const random = rng(7);
+  for (let i = 0; i < len; i++) {
+    const t = i / SR;
+    s[i] =
+      Math.sin(2 * Math.PI * 1120 * t) * env(i, 0.001, 0.014) * 0.7 +
+      Math.sin(2 * Math.PI * 1680 * t) * env(i, 0.0008, 0.008) * 0.3 +
+      (random() * 2 - 1) * env(i, 0.0004, 0.003) * 0.2;
+  }
+  writeWav('tick.wav', s);
+}
+
+// --- mult hit: bright ringing ding for the ×multiplier receipt card
+{
+  const len = secs(0.38);
+  const s = new Float64Array(len);
+  const partials = [
+    [1568, 1, 0.11],
+    [2352, 0.5, 0.08],
+    [3140, 0.3, 0.06],
+    [4710, 0.15, 0.04],
+  ];
+  for (let i = 0; i < len; i++) {
+    const t = i / SR;
+    let v = 0;
+    for (const [f, a, d] of partials) v += a * Math.sin(2 * Math.PI * f * t) * Math.exp(-t / d);
+    s[i] = v * env(i, 0.0008, 0.14) * 0.45;
+  }
+  writeWav('multhit.wav', s);
+}
+
+// --- bass hit: low pitch-dropping thump for the receipt total
+{
+  const len = secs(0.42);
+  const s = new Float64Array(len);
+  const random = rng(8);
+  for (let i = 0; i < len; i++) {
+    const t = i / SR;
+    const f = 82 - 40 * Math.min(1, t * 5);
+    s[i] =
+      Math.sin(2 * Math.PI * Math.max(f, 40) * t) * env(i, 0.003, 0.13) * 0.95 +
+      (random() * 2 - 1) * env(i, 0.0005, 0.006) * 0.12;
+  }
+  writeWav('basshit.wav', s);
+}
+
 // --- crowd bed: loopable murmur (low noise with slow undulation)
 {
   const len = secs(3.0);

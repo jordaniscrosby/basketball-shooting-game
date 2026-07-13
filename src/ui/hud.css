@@ -12,12 +12,21 @@
   font-display: swap;
 }
 
+/* Source of truth: config/artTheme.ts, written onto :root at boot by
+   ui/themeBridge.applyThemeToCss(). The literals below are pre-boot
+   fallbacks only — edit artTheme, not these. */
 :root {
   --ink: #2b1d16;
   --paper: #f8f2e2;
   --accent: #c9563c;
   --fire: #e8542f;
+  --star: #f7c948;
   --grain-opacity: 0.05;
+  /* Semantic score roles (artTheme.score) — color IS meaning, everywhere. */
+  --score-base: #2b1d16;
+  --score-bonus: #c9563c;
+  --score-mult: #f7c948;
+  --score-total: #e8542f;
   /* Scoreboard: white panel, near-black hand-drawn segments. */
   --sb-ink: #0a0a0a;
   --sb-paper: #ffffff;
@@ -84,49 +93,54 @@ body {
   box-shadow: 3px 4px 0 rgba(43, 29, 22, 0.35);
 }
 
-/* ── Scoreboard: hand-drawn white panel, seven-segment digits ──
-   Digits are built by ui/hud.ts (SegmentCell): each .seg-digit holds seven
-   <i class="seg seg-a…g"> bars; unlit bars stay faintly visible like a real
-   LCD, .lit bars go full ink. Wobbly skews/rotations sell the hand-drawn look. */
+/* ── Scoreboard: two hand-drawn panels, numbers only (Balatro-style) ──
+   Streak panel left, points panel right — no labels, no chips; meaning comes
+   from position and heat color. Digits are built by ui/hud.ts (SegmentCell):
+   each .seg-digit holds seven <i class="seg seg-a…g"> bars; unlit bars stay
+   faintly visible like a real LCD, .lit bars go full ink. Wobbly
+   skews/rotations sell the hand-drawn look. */
 
 #scoreboard {
   position: absolute;
   top: 14px;
   left: 14px;
-  background: var(--sb-paper);
-  border: 3px solid var(--sb-ink);
-  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
-  box-shadow: 3px 4px 0 rgba(20, 20, 20, 0.25);
-  padding: 0.55em 1.4em 0.45em;
-  transform: rotate(-0.6deg);
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
   color: var(--sb-ink);
-  text-align: center;
 }
 
-.sb-cells {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: clamp(1.2em, 4vw, 2.2em);
+/* Idle motion — nothing on screen is ever fully still. Animates the
+   standalone `rotate`/`translate` properties so base transforms survive. */
+@keyframes sb-breathe {
+  0%, 100% { rotate: calc(var(--sb-breathe-deg, 0.5deg) * -1); }
+  50% { rotate: var(--sb-breathe-deg, 0.5deg); }
+}
+
+@keyframes sb-breathe-half {
+  0%, 100% { rotate: calc(var(--sb-breathe-deg, 0.5deg) * -0.5); }
+  50% { rotate: calc(var(--sb-breathe-deg, 0.5deg) * 0.5); }
 }
 
 .sb-cell {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  align-self: stretch;
+  justify-content: center;
+  background: var(--sb-paper);
+  border: 3px solid var(--sb-ink);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  box-shadow: 3px 4px 0 rgba(20, 20, 20, 0.25);
+  padding: 0.5em 0.8em 0.45em;
+  transform: rotate(-0.6deg);
+  animation: sb-breathe var(--sb-breathe-sec, 4.5s) ease-in-out infinite;
 }
 
-.sb-label {
-  font-family: 'Patrick Hand', cursive;
-  font-size: clamp(0.72rem, 2vw, 0.92rem);
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-indent: 0.22em;
-  text-transform: uppercase;
-  color: var(--sb-ink);
-  margin-bottom: 0.35em;
+/* Second panel: mirrored radii + offset breathe so the pair never moves in
+   lockstep — two stickers slapped on the glass, not one widget. */
+.sb-cell + .sb-cell {
+  border-radius: 15px 225px 15px 255px / 255px 15px 225px 15px;
+  transform: rotate(0.6deg);
+  animation-delay: -2.2s;
 }
 
 .sb-digits {
@@ -135,145 +149,40 @@ body {
   font-size: clamp(1.7rem, 5.6vw, 2.5rem);
   line-height: 1;
   color: var(--sb-ink);
-  transition: color 0.4s ease;
+  transition: color 0.4s ease, scale 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Segments heat up with the run: amber → fire → rainbow-cycling at superstar. */
+/* Escalation theater — the run heats up and the typography renders it:
+   amber → fire digits GROW + glow → superstar grows more, hue-cycles, and
+   jitters chunky (steps(1) — comic ignition, not smooth vibration). */
 #scoreboard.heat-warm .sb-digits {
   color: #e08b00;
 }
 
 #scoreboard.heat-fire .sb-digits {
   color: var(--fire);
+  scale: var(--sb-heat-scale-fire, 1.04);
+  animation: digit-glow 1.4s ease-in-out infinite;
 }
 
 #scoreboard.heat-superstar .sb-digits {
   color: var(--fire);
-  animation: hue-cycle 1.6s linear infinite;
-}
-
-/* Mult badge: hand-drawn comic starburst sticker inline after the points
-   digits. ::before paints the ink outline (same burst, slightly inflated),
-   ::after the tier-colored fill. Tiers set by hud.ts via data-tier: 0 sits
-   dim next to the score; 1-3 light up and glow/bounce with rising urgency. */
-.sb-row {
-  display: flex;
-  align-items: center;
-}
-
-.sb-badge {
-  --badge-bg: var(--sb-paper);
-  --badge-fg: var(--sb-ink);
-  --badge-glow: transparent;
-  position: relative;
-  width: 0.95em;
-  height: 0.95em;
-  margin-left: 0.3em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: clamp(1.7rem, 5.6vw, 2.5rem);
-  line-height: 1;
-  transform: rotate(-5deg);
-  opacity: 0.25;
-  transition: opacity 0.35s ease;
-}
-
-.sb-badge:not([data-tier='0']) {
-  opacity: 1;
-}
-
-.sb-badge::before,
-.sb-badge::after {
-  content: '';
-  position: absolute;
-  clip-path: polygon(
-    50% 0%, 61% 12%, 76% 5%, 79% 22%, 95% 23%, 89% 38%, 100% 50%,
-    88% 61%, 95% 76%, 78% 79%, 74% 95%, 60% 87%, 50% 100%, 39% 88%,
-    24% 95%, 22% 78%, 5% 76%, 12% 61%, 0% 50%, 12% 38%, 6% 24%,
-    21% 21%, 26% 5%, 39% 12%
-  );
-}
-
-.sb-badge::before {
-  inset: -0.1em;
-  background: var(--sb-ink);
-}
-
-.sb-badge::after {
-  inset: 0;
-  background: var(--badge-bg);
-  transition: background-color 0.35s ease;
-}
-
-#mult-count {
-  position: relative;
-  z-index: 1;
-  font-family: 'Bangers', cursive;
-  font-size: 0.36em;
-  color: var(--badge-fg);
-  transform: rotate(2deg);
-}
-
-/* badge-bounce animates transform, badge-glow animates filter — kept as two
-   animations so the superstar variant can swap the filter track for one that
-   also hue-cycles without the two fighting over the same property. */
-.sb-badge[data-tier='1'] {
-  --badge-bg: #f7c948;
-  --badge-glow: rgba(247, 201, 72, 0.9);
+  scale: var(--sb-heat-scale-superstar, 1.09);
   animation:
-    badge-bounce 1.6s ease-in-out infinite,
-    badge-glow 1.6s ease-in-out infinite;
+    hue-cycle 1.6s linear infinite,
+    digit-ignite 0.32s steps(1, end) infinite;
 }
 
-.sb-badge[data-tier='2'] {
-  --badge-bg: var(--fire);
-  --badge-fg: var(--sb-paper);
-  --badge-glow: rgba(232, 84, 47, 0.9);
-  animation:
-    badge-bounce 1s ease-in-out infinite,
-    badge-glow 1s ease-in-out infinite;
+@keyframes digit-glow {
+  0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+  50% { filter: drop-shadow(0 0 0.12em color-mix(in srgb, var(--fire) 75%, transparent)); }
 }
 
-.sb-badge[data-tier='3'] {
-  --badge-bg: #d92b2b;
-  --badge-fg: var(--sb-paper);
-  --badge-glow: rgba(217, 43, 43, 0.9);
-  animation:
-    badge-bounce 0.75s ease-in-out infinite,
-    badge-glow 0.75s ease-in-out infinite;
-}
-
-#scoreboard.heat-superstar .sb-badge[data-tier='3'] {
-  animation:
-    badge-bounce 0.75s ease-in-out infinite,
-    badge-glow-hue 1.6s linear infinite;
-}
-
-/* Pop on multiplier increase — declared after the tier rules so it wins. */
-.sb-badge.pop {
-  animation: badge-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes badge-pop {
-  0% { transform: scale(0.2) rotate(-30deg); }
-  60% { transform: scale(1.35) rotate(4deg); }
-  100% { transform: scale(1) rotate(-5deg); }
-}
-
-@keyframes badge-bounce {
-  0%, 100% { transform: scale(1) rotate(-5deg); }
-  50% { transform: scale(1.08) rotate(-1deg); }
-}
-
-@keyframes badge-glow {
-  0%, 100% { filter: drop-shadow(0 0 0 var(--badge-glow)); }
-  50% { filter: drop-shadow(0 0 0.14em var(--badge-glow)); }
-}
-
-@keyframes badge-glow-hue {
-  from { filter: hue-rotate(0deg) drop-shadow(0 0 0.12em var(--badge-glow)); }
-  to { filter: hue-rotate(360deg) drop-shadow(0 0 0.12em var(--badge-glow)); }
+@keyframes digit-ignite {
+  0%, 100% { translate: 0 0; }
+  25% { translate: var(--sb-ignite-px, 1.2px) calc(var(--sb-ignite-px, 1.2px) * -0.5); }
+  50% { translate: calc(var(--sb-ignite-px, 1.2px) * -0.8) calc(var(--sb-ignite-px, 1.2px) * 0.4); }
+  75% { translate: calc(var(--sb-ignite-px, 1.2px) * 0.5) calc(var(--sb-ignite-px, 1.2px) * 0.7); }
 }
 
 @keyframes hue-cycle {
@@ -341,73 +250,36 @@ body {
   animation: led-punch 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Mobile: full-width top bar instead of the floating top-left panel. */
+/* Pop as a rolled digit column settles on a new glyph. Animates the
+   standalone `scale` property so the base skew/rotate transform survives. */
+.seg-digit.digit-pop {
+  animation: digit-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes digit-pop {
+  0% { scale: 1; }
+  35% { scale: var(--digit-pop-scale, 1.22); }
+  100% { scale: 1; }
+}
+
+/* Mobile: panels spread across the top edge, streak left / points right. */
 @media (max-width: 640px) {
   #scoreboard {
-    top: 0;
-    left: 0;
-    right: 0;
-    transform: none;
-    border-radius: 0;
-    border-top: none;
-    border-left: none;
-    border-right: none;
-    box-shadow: 0 3px 0 rgba(20, 20, 20, 0.2);
-    padding: 0.45em 1em 0.4em;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    justify-content: space-between;
   }
 
-  .sb-cells {
-    justify-content: space-evenly;
+  .sb-cell {
+    padding: 0.4em 0.7em 0.35em;
   }
-}
-
-/* Heat lamp: indicator dot + label under the cells. */
-#heat-label {
-  margin-top: 0.2em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45em;
-  font-family: 'Bangers', cursive;
-  font-size: clamp(0.75rem, 2vw, 0.95rem);
-  letter-spacing: 0.3em;
-  text-indent: 0.3em;
-  text-transform: uppercase;
-  color: var(--sb-ink);
-  opacity: 0;
-  transition: opacity 0.35s ease-out;
-}
-
-#heat-label.visible {
-  opacity: 1;
-}
-
-.sb-lamp {
-  flex: 0 0 auto;
-  width: 0.5em;
-  height: 0.5em;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-#scoreboard.heat-fire #heat-label {
-  color: var(--fire);
-}
-
-#scoreboard.heat-fire .sb-lamp,
-#scoreboard.heat-superstar .sb-lamp {
-  animation: lamp-blink 0.7s ease-in-out infinite;
 }
 
 @keyframes led-punch {
   0% { transform: scale(1); }
   35% { transform: scale(1.4); }
   100% { transform: scale(1); }
-}
-
-@keyframes lamp-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
 }
 
 #stats-btn {
@@ -425,6 +297,7 @@ body {
   cursor: pointer;
   opacity: 0.75;
   transform: rotate(-1deg);
+  animation: sb-breathe-half var(--sb-breathe-sec, 4.5s) ease-in-out -1.7s infinite;
 }
 
 #stats-btn:hover {
@@ -447,6 +320,7 @@ body {
   cursor: pointer;
   opacity: 0.75;
   transform: rotate(0.8deg);
+  animation: sb-breathe-half var(--sb-breathe-sec, 4.5s) ease-in-out -3.1s infinite;
 }
 
 #controls-btn:hover {
@@ -470,7 +344,19 @@ body {
   pointer-events: none;
 }
 
+/* Swirl cameo behind the stats/game-over card (fx/swirl.ts, mounted by
+   Hud.attachSwirl). Chunky upscale is the point — keep pixels crisp. */
+#score-screen .swirl-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: var(--swirl-screen-alpha, 0.85);
+  image-rendering: pixelated;
+}
+
 .score-card {
+  position: relative; /* stacks above the swirl backdrop */
   text-align: center;
   background: var(--paper);
   border: 4px solid var(--ink);
@@ -554,23 +440,41 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-body.shake #game {
-  animation: brick-shake 0.18s linear;
+/* Magnitude-tiered screen shake (fx/shake.ts sets the vars + classes): the
+   world canvas, FX overlay, and HUD move as ONE comic panel. Deliberately
+   not `body *` — lil-gui and the swipe overlay stay still. */
+body.shake-sm #game,
+body.shake-sm #fx-overlay,
+body.shake-sm #hud {
+  animation: shake-xy var(--shake-ms, 200ms) linear;
 }
 
-@keyframes brick-shake {
-  0%, 100% {
-    transform: translate(0, 0);
-  }
-  25% {
-    transform: translate(3px, -2px);
-  }
-  50% {
-    transform: translate(-3px, 2px);
-  }
-  75% {
-    transform: translate(2px, 1px);
-  }
+body.shake-md #game,
+body.shake-md #fx-overlay,
+body.shake-md #hud {
+  animation: shake-xy var(--shake-ms, 300ms) linear;
+}
+
+body.shake-lg #game,
+body.shake-lg #fx-overlay,
+body.shake-lg #hud {
+  animation: shake-roll var(--shake-ms, 500ms) linear;
+}
+
+@keyframes shake-xy {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(var(--shake-px, 2px), calc(var(--shake-px, 2px) * -0.7)); }
+  45% { transform: translate(calc(var(--shake-px, 2px) * -1), calc(var(--shake-px, 2px) * 0.6)); }
+  70% { transform: translate(calc(var(--shake-px, 2px) * 0.6), calc(var(--shake-px, 2px) * 0.4)); }
+}
+
+/* Large tier adds ±roll; the baked scale keeps canvas corners covered. */
+@keyframes shake-roll {
+  0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+  15% { transform: translate(var(--shake-px, 8px), calc(var(--shake-px, 8px) * -0.5)) rotate(var(--shake-deg, 1deg)) scale(1.02); }
+  35% { transform: translate(calc(var(--shake-px, 8px) * -0.9), calc(var(--shake-px, 8px) * 0.5)) rotate(calc(var(--shake-deg, 1deg) * -1)) scale(1.02); }
+  55% { transform: translate(calc(var(--shake-px, 8px) * 0.6), calc(var(--shake-px, 8px) * 0.3)) rotate(calc(var(--shake-deg, 1deg) * 0.6)) scale(1.02); }
+  78% { transform: translate(calc(var(--shake-px, 8px) * -0.3), calc(var(--shake-px, 8px) * -0.2)) rotate(calc(var(--shake-deg, 1deg) * -0.3)) scale(1.01); }
 }
 
 /* Art-review mode (?art=<preset>, src/debug/artReview.ts): hide all game

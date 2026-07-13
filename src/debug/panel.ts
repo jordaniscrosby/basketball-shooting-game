@@ -2,6 +2,7 @@ import GUI, { Controller } from 'lil-gui';
 import { tuning } from '../config/tuning';
 import { artTheme } from '../config/artTheme';
 import { refreshGradientMap } from '../scene/toon';
+import { applyThemeToCss } from '../ui/themeBridge';
 import { copyThemeDiff, saveThemeAndReload, resetThemeAndReload } from './themeStore';
 
 export interface PanelHooks {
@@ -176,13 +177,23 @@ export function createDebugPanel(hooks: PanelHooks): GUI {
   tip(art.add(artTheme.trail, 'dashWidth', 0.01, 0.1, 0.005),
     'Ball trail dash ribbon width (m) at the head.');
 
+  // Semantic score colors are fully live: the FX canvas reads artTheme.score
+  // each draw and themeBridge pushes them onto the HUD's CSS vars on change.
+  const scoreCols = art.addFolder('score colors (live)');
+  for (const key of Object.keys(artTheme.score) as Array<keyof typeof artTheme.score>) {
+    tip(scoreCols.addColor(artTheme.score, key).onChange(applyThemeToCss),
+      'Semantic score color — same role everywhere (HUD, receipt cards, particles). Live.');
+  }
+  scoreCols.close();
+
   // Palette/outline/bake dials are painted into textures and hull geometry at
   // startup — tweak, then "apply theme" (persists the diff + reloads) to see
   // them. "copy theme JSON" exports the diff for committing into artTheme.ts.
+  // (The HUD/FX side of palette colors does go live via the CSS bridge.)
   const pal = art.addFolder('palette (apply to see)');
   for (const key of Object.keys(artTheme.palette) as Array<keyof typeof artTheme.palette>) {
-    tip(pal.addColor(artTheme.palette, key),
-      'Baked into materials/textures at startup — use "apply theme" to see it.');
+    tip(pal.addColor(artTheme.palette, key).onChange(applyThemeToCss),
+      'Baked into materials/textures at startup — use "apply theme" to see it (HUD colors update live).');
   }
   pal.close();
 
@@ -207,9 +218,71 @@ export function createDebugPanel(hooks: PanelHooks): GUI {
     'Court/backboard marking jitter (px on the painted canvas) — hand-ruled line wobble.');
   outline.close();
 
+  const hudDials = art.addFolder('hud (live)');
+  tip(hudDials.add(artTheme.hud, 'rollMs', 100, 1200, 10),
+    'Scoreboard digit roll duration (ms).');
+  tip(hudDials.add(artTheme.hud, 'digitStaggerMs', 0, 200, 5),
+    'Per-column roll start offset (ms) — the slot-reel cascade, ones column first.');
+  tip(hudDials.add(artTheme.hud, 'rollOvershoot', 0, 4, 0.05),
+    'easeOutBack overshoot strength — how far the roll lands past the target before snapping back.');
+  tip(hudDials.add(artTheme.hud, 'digitPopScale', 1, 1.6, 0.01).onChange(applyThemeToCss),
+    'Pop scale of a digit column as it settles on a new glyph.');
+  tip(hudDials.add(artTheme.hud, 'breatheDeg', 0, 2, 0.05).onChange(applyThemeToCss),
+    'Scoreboard idle breathe amplitude (±deg) — subliminal, not seasick.');
+  tip(hudDials.add(artTheme.hud, 'breatheSec', 1, 12, 0.5).onChange(applyThemeToCss),
+    'Scoreboard idle breathe period (s).');
+  tip(hudDials.add(artTheme.hud, 'heatScaleFire', 1, 1.3, 0.01).onChange(applyThemeToCss),
+    'Digit scale while on fire — escalation theater.');
+  tip(hudDials.add(artTheme.hud, 'heatScaleSuperstar', 1, 1.4, 0.01).onChange(applyThemeToCss),
+    'Digit scale at superstar.');
+  tip(hudDials.add(artTheme.hud, 'igniteJitterPx', 0, 4, 0.1).onChange(applyThemeToCss),
+    'Superstar digit jitter amplitude (px) — chunky comic ignition.');
+  hudDials.close();
+
+  const shakeDials = art.addFolder('shake (live)');
+  tip(shakeDials.add(artTheme.shake, 'smallPx', 0, 12, 0.5),
+    'Small-tier shake offset (px) — plain makes, bricks.');
+  tip(shakeDials.add(artTheme.shake, 'mediumPx', 0, 16, 0.5),
+    'Medium-tier shake offset (px) — swishes, banks, solid scores.');
+  tip(shakeDials.add(artTheme.shake, 'largePx', 0, 24, 0.5),
+    'Large-tier shake offset (px) — milestones, on-fire makes.');
+  tip(shakeDials.add(artTheme.shake, 'largeDeg', 0, 3, 0.1),
+    'Large-tier roll (±deg).');
+  tip(shakeDials.add(artTheme.shake, 'mediumScore', 0, 500, 10),
+    'Score total that promotes a make to the medium shake tier.');
+  tip(shakeDials.add(artTheme.shake, 'largeScore', 0, 1500, 10),
+    'Score total that promotes a make to the large shake tier.');
+  shakeDials.close();
+
   const fxDials = art.addFolder('fx (live)');
   tip(fxDials.add(artTheme.fx, 'stepHz', 4, 30, 1),
     'Comic overlay stepped-animation rate (fps) — "on twos" chop of the 2D layer.');
+  tip(fxDials.add(artTheme.fx, 'receiptStepMs', 60, 400, 10),
+    'Score-receipt per-card reveal step (ms) — the sequential-causality pacing.');
+  tip(fxDials.add(artTheme.fx, 'receiptTotalScale', 1, 2, 0.05),
+    'Size multiplier of the receipt "= total" card vs the term cards.');
+  tip(fxDials.add(artTheme.fx, 'panelDimAlpha', 0, 0.8, 0.01),
+    'World dim darkness while a freeze panel is up (reward-reveal staging).');
+  tip(fxDials.add(artTheme.fx, 'panelSpotScale', 1, 3, 0.05),
+    'Spotlight ellipse size around the freeze panel, relative to the card.');
+  tip(fxDials.add(artTheme.heatFx, 'rimEmissiveWarm', 0, 1, 0.01),
+    'Rim glow while heating up (applies on next heat change).');
+  tip(fxDials.add(artTheme.heatFx, 'rimEmissiveFire', 0, 1, 0.01),
+    'Rim glow while on fire.');
+  tip(fxDials.add(artTheme.heatFx, 'rimEmissiveSuperstar', 0, 1, 0.01),
+    'Rim glow at superstar (hue-cycles with the ball).');
+  tip(fxDials.add(artTheme.swirl, 'pixelFilter', 40, 700, 10),
+    'Swirl cameo pixelation — lower = chunkier, more painted.');
+  tip(fxDials.add(artTheme.swirl, 'spinAmount', 0, 1, 0.01),
+    'Swirl cameo curvature.');
+  tip(fxDials.add(artTheme.swirl, 'contrast', 0.5, 5, 0.1),
+    'Swirl cameo paint-boundary sharpness.');
+  tip(fxDials.add(artTheme.swirl, 'speed', 0, 3, 0.05),
+    'Swirl cameo churn speed.');
+  tip(fxDials.add(artTheme.swirl, 'panelFillAlpha', 0, 1, 0.05),
+    'Swirl opacity inside freeze panels.');
+  tip(fxDials.add(artTheme.swirl, 'screenAlpha', 0, 1, 0.05).onChange(applyThemeToCss),
+    'Swirl backdrop opacity behind the stats/game-over card.');
   tip(fxDials.add(artTheme.fx, 'freezeSec', 0, 1, 0.05),
     'Milestone freeze-frame duration (s).');
   tip(fxDials.add(artTheme.fx, 'stretchMax', 1, 1.5, 0.01),

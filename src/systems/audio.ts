@@ -1,7 +1,16 @@
 import { Howl } from 'howler';
 import { tuning } from '../config/tuning';
 
-type Sfx = 'bounce' | 'clank' | 'rattle' | 'thud' | 'swish' | 'swell';
+type Sfx =
+  | 'bounce'
+  | 'clank'
+  | 'rattle'
+  | 'thud'
+  | 'swish'
+  | 'swell'
+  | 'tick'
+  | 'multhit'
+  | 'basshit';
 
 /**
  * SFX bank on howler. Contact sounds fire straight from collision events in
@@ -27,6 +36,9 @@ export class AudioBank {
       rattle: load('rattle'),
       thud: load('thud'),
       swell: load('swell'),
+      tick: load('tick'),
+      multhit: load('multhit'),
+      basshit: load('basshit'),
     };
     this.crowd = new Howl({ src: ['audio/crowd.wav'], loop: true, volume: 0 });
   }
@@ -49,6 +61,18 @@ export class AudioBank {
     h.play();
   }
 
+  /**
+   * Score-receipt tick at rising pitch: each stacked term plays the same
+   * short sample with playbackRate climbing by tuning.juice.tickPitchStep per
+   * step — a long receipt audibly climbs (the Balatro C→G escalation).
+   */
+  playTick(step: number): void {
+    const h = this.sfx.tick;
+    h.volume(Math.min(1, tuning.juice.tickVolume * tuning.juice.audioVolume));
+    h.rate(1 + step * tuning.juice.tickPitchStep);
+    h.play();
+  }
+
   /** Crowd bed volume follows heat; 0 stops it entirely. */
   setCrowdLevel(level: number): void {
     const v = Math.min(1, level) * 0.6 * tuning.juice.audioVolume;
@@ -65,7 +89,15 @@ export class AudioBank {
 
   /** The miss moment: everything stops dead. */
   silenceCut(): void {
-    for (const h of [...this.swishes, this.sfx.swell, this.sfx.rattle]) h.stop();
+    for (const h of [
+      ...this.swishes,
+      this.sfx.swell,
+      this.sfx.rattle,
+      this.sfx.tick,
+      this.sfx.multhit,
+      this.sfx.basshit,
+    ])
+      h.stop();
     if (this.crowdId !== null) {
       this.crowd.stop();
       this.crowdId = null;

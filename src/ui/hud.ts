@@ -1,14 +1,15 @@
 import type { Heat } from '../core/state';
 import type { ControlMode } from '../input/controlMode';
 import type { LeaderboardEntry, CareerStats } from './persist';
-import { multiplierForStars } from '../systems/scoreEngine';
+import { artTheme } from '../config/artTheme';
+import { clamp01, easeOutBack } from '../core/ease';
+import type { SwirlCanvas } from '../fx/swirl';
 
 const HEATS: Heat[] = ['warm', 'fire', 'superstar'];
 
 /** Segment bitmasks for digits 0-9; bit i lights segment SEG_NAMES[i]. */
 const DIGIT_SEGMENTS = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f];
 const SEG_NAMES = ['a', 'b', 'c', 'd', 'e', 'f', 'g'] as const;
-const ROLL_MS = 450;
 
 /**
  * One seven-segment scoreboard cell: builds `count` digits (7 <i> segments
@@ -16,6 +17,7 @@ const ROLL_MS = 450;
  * leading digits, and can roll to a new value like a mechanical counter.
  */
 class SegmentCell {
+  private readonly digitEls: HTMLElement[] = [];
   private readonly digits: HTMLElement[][] = [];
   private shown = 0;
   private raf = 0;
@@ -27,6 +29,7 @@ class SegmentCell {
     for (let i = 0; i < count; i++) {
       const digit = document.createElement('span');
       digit.className = 'seg-digit';
+      digit.addEventListener('animationend', () => digit.classList.remove('digit-pop'));
       const segs: HTMLElement[] = [];
       for (const name of SEG_NAMES) {
         const seg = document.createElement('i');
@@ -35,6 +38,7 @@ class SegmentCell {
         segs.push(seg);
       }
       root.appendChild(digit);
+      this.digitEls.push(digit);
       this.digits.push(segs);
     }
     this.render(0);
@@ -48,31 +52,65 @@ class SegmentCell {
       this.render(value);
       return;
     }
+    // Staggered slot-reel roll: every column tracks its own easeOutBack tween
+    // of the full value, offset by digitStaggerMs from the ones column — so
+    // the display cascades right-to-left, rolls PAST the target, and snaps
+    // back. A column whose glyph changed pops as it settles.
+    const { rollMs, digitStaggerMs, rollOvershoot } = artTheme.hud;
+    const n = this.digits.length;
+    const fromGlyphs = this.glyphs(from);
+    const toGlyphs = this.glyphs(value);
+    const totalMs = rollMs + digitStaggerMs * (n - 1);
+    const settled: boolean[] = new Array(n).fill(false);
     const start = performance.now();
     const tick = (now: number) => {
-      const t = Math.min((now - start) / ROLL_MS, 1);
-      const eased = 1 - (1 - t) ** 3;
-      this.render(Math.round(from + (value - from) * eased));
-      if (t < 1) this.raf = requestAnimationFrame(tick);
+      const elapsed = now - start;
+      for (let col = 0; col < n; col++) {
+        const t = clamp01((elapsed - (n - 1 - col) * digitStaggerMs) / rollMs);
+        const v = Math.round(from + (value - from) * easeOutBack(t, rollOvershoot));
+        this.renderColumn(col, this.glyphs(v)[col]!);
+        if (t >= 1 && !settled[col]) {
+          settled[col] = true;
+          if (fromGlyphs[col] !== toGlyphs[col]) this.popColumn(col);
+        }
+      }
+      if (elapsed < totalMs) this.raf = requestAnimationFrame(tick);
+      else this.render(value);
     };
     this.raf = requestAnimationFrame(tick);
   }
 
-  private render(value: number): void {
+  /** Per-column glyphs for a value; '' for unlit leading digits. */
+  private glyphs(value: number): string[] {
     const max = 10 ** this.digits.length - 1;
     const text = String(Math.max(0, Math.min(value, max)));
-    this.root.setAttribute('aria-label', text);
     const pad = this.digits.length - text.length;
-    this.digits.forEach((segs, i) => {
-      const mask = i < pad ? 0 : (DIGIT_SEGMENTS[Number(text[i - pad])] ?? 0);
-      segs.forEach((seg, bit) => seg.classList.toggle('lit', (mask & (1 << bit)) !== 0));
-    });
+    return this.digits.map((_, i) => (i < pad ? '' : text[i - pad]!));
+  }
+
+  private renderColumn(col: number, glyph: string): void {
+    const mask = glyph === '' ? 0 : (DIGIT_SEGMENTS[Number(glyph)] ?? 0);
+    this.digits[col]!.forEach((seg, bit) => seg.classList.toggle('lit', (mask & (1 << bit)) !== 0));
+  }
+
+  private popColumn(col: number): void {
+    const el = this.digitEls[col]!;
+    el.classList.remove('digit-pop');
+    void el.offsetWidth; // restart animation
+    el.classList.add('digit-pop');
+  }
+
+  private render(value: number): void {
+    const max = 10 ** this.digits.length - 1;
+    this.root.setAttribute('aria-label', String(Math.max(0, Math.min(value, max))));
+    this.glyphs(value).forEach((glyph, col) => this.renderColumn(col, glyph));
   }
 }
 
 /**
- * DOM HUD: the scoreboard (seven-segment points/streak/mult cells, heat lamp)
- * and the deliberately-opened stats screen (leaderboard + career stats).
+ * DOM HUD: the two-panel scoreboard (Balatro-style — bare seven-segment
+ * streak and points numbers, no labels; heat is shown, never said) and the
+ * deliberately-opened stats screen (leaderboard + career stats).
  * Score math receipts live on the comic FX layer, not here.
  */
 export class Hud {
@@ -80,11 +118,6 @@ export class Hud {
   private readonly score = document.getElementById('run-score')!;
   private readonly scoreCell = new SegmentCell(this.score, 4);
   private readonly streakCell = new SegmentCell(document.getElementById('streak-count')!, 2);
-  private readonly multBadge = document.getElementById('mult-badge')!;
-  private readonly multCount = document.getElementById('mult-count')!;
-  private lastMult = 1;
-  private readonly heatLabel = document.getElementById('heat-label')!;
-  private readonly heatText = document.getElementById('heat-text')!;
   private readonly scoreScreen = document.getElementById('score-screen')!;
   private readonly bestRunEl = document.getElementById('best-run')!;
   private readonly bestLine = document.getElementById('best-line')!;
@@ -93,9 +126,6 @@ export class Hud {
   private readonly controlsBtn = document.getElementById('controls-btn')!;
 
   constructor(onToggleStats: () => void, onToggleControls: () => void) {
-    this.multBadge.addEventListener('animationend', (e) => {
-      if (e.animationName === 'badge-pop') this.multBadge.classList.remove('pop');
-    });
     document.getElementById('stats-btn')!.addEventListener('click', onToggleStats);
     document.getElementById('retry-btn')!.addEventListener('click', onToggleStats);
     this.controlsBtn.addEventListener('click', onToggleControls);
@@ -105,19 +135,18 @@ export class Hud {
     this.controlsBtn.textContent = mode === 'slingshot' ? 'input: drag' : 'input: swipe';
   }
 
+  /** Optional swirl cameo: paints behind the stats/game-over card. */
+  attachSwirl(swirl: SwirlCanvas): void {
+    this.swirl = swirl;
+    swirl.canvas.classList.add('swirl-bg');
+    this.scoreScreen.prepend(swirl.canvas);
+  }
+  private swirl: SwirlCanvas | null = null;
+
   /** `punch` also opts into the roll-up animation; resets snap instantly. */
-  setRun(runScore: number, streak: number, stars: number, punch = false): void {
+  setRun(runScore: number, streak: number, punch = false): void {
     this.scoreCell.set(runScore, punch);
     this.streakCell.set(streak, punch);
-    const mult = multiplierForStars(stars);
-    this.multCount.textContent = `×${mult}`;
-    this.multBadge.dataset.tier = String(mult >= 6 ? 3 : mult >= 4 ? 2 : mult >= 2 ? 1 : 0);
-    if (mult > this.lastMult) {
-      this.multBadge.classList.remove('pop');
-      void this.multBadge.offsetWidth; // restart animation
-      this.multBadge.classList.add('pop');
-    }
-    this.lastMult = mult;
     if (punch) {
       this.score.classList.remove('punch');
       void (this.score as HTMLElement).offsetWidth; // restart animation
@@ -125,11 +154,8 @@ export class Hud {
     }
   }
 
+  /** Heat is never spelled out — the digit color/glow/jitter says it. */
   setHeat(heat: Heat): void {
-    if (heat === 'superstar') this.heatText.textContent = 'superstar';
-    else if (heat === 'fire') this.heatText.textContent = 'on fire';
-    else if (heat === 'warm') this.heatText.textContent = 'heating up';
-    this.heatLabel.classList.toggle('visible', heat !== 'cold');
     for (const h of HEATS) this.scoreboard.classList.toggle(`heat-${h}`, heat === h);
   }
 
@@ -164,10 +190,13 @@ export class Hud {
         return div;
       }),
     );
+    const P = artTheme.palette;
+    this.swirl?.want('screen', true, [P.paper, P.courtAccent, P.ink]);
     this.scoreScreen.classList.remove('hidden');
   }
 
   hideStatsScreen(): void {
+    this.swirl?.want('screen', false);
     this.scoreScreen.classList.add('hidden');
   }
 }

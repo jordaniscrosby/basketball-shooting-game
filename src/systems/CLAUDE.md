@@ -17,7 +17,7 @@ Pure, composable game logic. Modules here take structural interfaces (`ForceBody
 - **scheduler.ts** — `pickNextPosition(pool, streak, shotIndex, prev, rng?)`: linear difficulty ramp (`targetDifficulty`), Gaussian weights around the target, anti-repeat, every-Nth breather. `rng` injectable — tests use seeded mulberry32.
 - **shotReplay.ts** — `class ShotReplay`: records exact release state (+ attached steer timeline) and re-fires it via `fire(ball)`. The debugging backbone for physics tuning; relies on Rapier local determinism + the fixed timestep.
 - **shotBattery.ts** — `runShotBattery()`: fires solved perfect shots from **every** curated position in a fresh headless Rapier world and checks they all score. Runs in vitest AND from the debug panel. Test asserts zero misses and makeRate ≥ 0.99. **This is the regression gate for any change to tuning physics, the solver, hoop colliders, scoring geometry, or the position pool.**
-- **audio.ts** — Howler SFX bank (`play` with throttle, `setCrowdLevel` by heat, `silenceCut` on miss). Not part of the shot math; WAVs live in `public/audio/`.
+- **audio.ts** — Howler SFX bank (`play` with throttle, `playTick(step)` — score-receipt tick at rising pitch via playbackRate `1 + step·tuning.juice.tickPitchStep`, `setCrowdLevel` by heat, `silenceCut` on miss). Not part of the shot math; WAVs live in `public/audio/`.
 
 ## Test conventions
 

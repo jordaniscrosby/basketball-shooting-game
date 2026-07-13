@@ -16,7 +16,9 @@ Coupled constants (move together):
 - Any physics-section change ⇒ re-run the shot battery (`npx vitest run src/systems/shotBattery.test.ts`).
 
 ## artTheme.ts
-`export const artTheme` — visual/style registry, same discipline as tuning. Sections: `palette`, `cel`, `outline`, `boil`, `blobShadow`, `net`, `trail`, `fx` (freezeSec, smearSec, stretchMax, squashMin, comic-layer stepHz "on twos"), `grainOpacity`. After mutating `artTheme.cel`, call `scene/toon.refreshGradientMap()` — the cel gradient texture is cached (the panel already does this).
+`export const artTheme` — visual/style registry, same discipline as tuning. Sections: `palette`, `score` (the semantic score colors — base/bonus/mult/total; the Balatro rule: the mapping never breaks across HUD, receipt cards, particles), `hud` (digit roll/stagger/overshoot/pop, idle breathe, heat escalation scales), `shake` (3 shake tiers + score thresholds), `cel`, `outline`, `boil`, `blobShadow`, `net`, `trail`, `fx` (stepHz "on twos", receipt pacing, panel dim/spotlight, freezeSec, smearSec, stretch/squash, starTwinkle), `swirl` (paint-swirl cameo dials), `heatFx` (rim emissive per heat tier), `grainOpacity`. After mutating `artTheme.cel`, call `scene/toon.refreshGradientMap()` — the cel gradient texture is cached (the panel already does this). Colors + HUD motion dials reach the DOM via `ui/themeBridge.applyThemeToCss()` (CSS custom properties) — call it after mutating those outside the debug panel.
+
+Coupled: `score.mult` should stay visually identical to `palette.star` (the mult badge, star particles, and ×N receipt card all read as "the gold"). Audio counterparts of the receipt (tick pitch ramp, volumes) live in `tuning.juice`, not here — audio isn't visual.
 
 ## positions.ts
 The curated shot-position pool. `getPositions()` builds 18 hand-placed spots from raw `[id, name, tier, x, dz]` tuples, computing `dist`/`octant`/`band`/`difficulty`. `launchPointFor(pos)` returns the THREE.Vector3 launch point at `tuning.game.releaseHeight`. Types: `ShotPosition`, `DistanceBand` (`'close'|'mid'|'three'|'deep'`).

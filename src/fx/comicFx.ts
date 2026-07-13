@@ -1,8 +1,11 @@
 import * as THREE from 'three';
 import { artTheme } from '../config/artTheme';
 import { seededRng, hash01 } from '../scene/toon';
+import type { SwirlCanvas } from './swirl';
 
-type CardStyle = 'paper' | 'accent' | 'fire' | 'star';
+/** 'base' | 'bonus' | 'mult' | 'total' are the semantic score roles
+ *  (artTheme.score) — same colors as the HUD, the mapping never breaks. */
+type CardStyle = 'paper' | 'accent' | 'fire' | 'star' | 'base' | 'bonus' | 'mult' | 'total';
 
 interface FxCard {
   kind: 'card';
@@ -19,6 +22,8 @@ interface FxCard {
   seed: number;
   /** Stack offset (px) so simultaneous cards don't overlap. */
   offsetY: number;
+  /** Size multiplier — receipt total cards render bigger than term cards. */
+  scale: number;
 }
 
 interface FxParticles {
@@ -44,6 +49,8 @@ export class ComicFx {
   private items: FxItem[] = [];
   private time = 0;
   private focus = false;
+  private swirl: SwirlCanvas | null = null;
+  private panelSwirlOn = false;
   private readonly v = new THREE.Vector3();
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -63,7 +70,7 @@ export class ComicFx {
   card(
     text: string,
     world: THREE.Vector3,
-    opts: { sub?: string; style?: CardStyle; burst?: boolean; stack?: number } = {},
+    opts: { sub?: string; style?: CardStyle; burst?: boolean; stack?: number; scale?: number } = {},
   ): void {
     this.items.push({
       kind: 'card',
@@ -78,6 +85,7 @@ export class ComicFx {
       tilt: (hash01(this.items.length + text.length) - 0.5) * 0.14,
       seed: (this.items.length * 7919) ^ text.length,
       offsetY: (opts.stack ?? 0) * 58,
+      scale: opts.scale ?? 1,
     });
   }
 
@@ -96,6 +104,7 @@ export class ComicFx {
       tilt: -0.035,
       seed: this.items.length * 104729,
       offsetY: 0,
+      scale: 1,
     });
   }
 
@@ -116,6 +125,11 @@ export class ComicFx {
     this.focus = on;
   }
 
+  /** Optional swirl cameo: big panels fill their interiors with it. */
+  attachSwirl(swirl: SwirlCanvas): void {
+    this.swirl = swirl;
+  }
+
   render(dt: number, camera: THREE.Camera): void {
     this.time += dt * 1000;
     const { ctx, canvas } = this;
@@ -124,6 +138,26 @@ export class ComicFx {
     if (this.focus) this.drawFocusLines();
 
     this.items = this.items.filter((it) => this.time - it.born < it.lifeMs);
+    // Reward-reveal staging: while a big freeze panel is up, dim the world to
+    // ink with a spotlight hole — drawn under the cards so the panel is lit.
+    let bigPanel: FxCard | null = null;
+    for (let i = this.items.length - 1; i >= 0; i--) {
+      const it = this.items[i]!;
+      if (it.kind === 'card' && it.big) {
+        bigPanel = it;
+        break;
+      }
+    }
+    if (bigPanel) this.drawPanelDim(bigPanel);
+    // Swirl cameo lifecycle: runs only while a panel needs it.
+    if (this.swirl) {
+      if (!!bigPanel !== this.panelSwirlOn) {
+        this.panelSwirlOn = !!bigPanel;
+        const P = artTheme.palette;
+        this.swirl.want('panel', this.panelSwirlOn, [P.fire, P.star, P.ink]);
+      }
+      this.swirl.update(dt);
+    }
     for (const it of this.items) {
       // Quantize age to the step grid — animation on twos.
       const age = this.time - it.born;
@@ -146,6 +180,7 @@ export class ComicFx {
 
   private styleColors(style: CardStyle): { bg: string; fg: string } {
     const P = artTheme.palette;
+    const S = artTheme.score;
     switch (style) {
       case 'accent':
         return { bg: P.courtAccent, fg: P.paper };
@@ -153,9 +188,42 @@ export class ComicFx {
         return { bg: P.fire, fg: P.paper };
       case 'star':
         return { bg: P.star, fg: P.ink };
+      case 'base':
+        return { bg: P.paper, fg: S.base };
+      case 'bonus':
+        return { bg: S.bonus, fg: P.paper };
+      case 'mult':
+        return { bg: S.mult, fg: P.ink };
+      case 'total':
+        return { bg: S.total, fg: P.paper };
       default:
         return { bg: P.paper, fg: P.ink };
     }
+  }
+
+  /** Ink dim with a transparent spotlight ellipse at the panel anchor —
+   *  fades in over the pop and out with the panel exit, on the step grid. */
+  private drawPanelDim(panel: FxCard): void {
+    const { ctx, canvas } = this;
+    const stepMs = 1000 / artTheme.fx.stepHz;
+    const stepped = Math.floor((this.time - panel.born) / stepMs) * stepMs;
+    const exitStart = panel.lifeMs - 180;
+    const fadeIn = Math.min(1, stepped / (artTheme.fx.popMs * 2));
+    const fadeOut = stepped >= exitStart ? Math.max(0, 1 - (stepped - exitStart) / 180) : 1;
+    const alpha = artTheme.fx.panelDimAlpha * fadeIn * fadeOut;
+    if (alpha <= 0.01) return;
+    const cx = canvas.width / 2;
+    const cy = canvas.height * 0.42;
+    const fontPx = Math.min(96, canvas.width * 0.085);
+    const spot = fontPx * 2.6 * artTheme.fx.panelSpotScale;
+    const g = ctx.createRadialGradient(cx, cy, spot * 0.55, cx, cy, spot * 1.7);
+    g.addColorStop(0, 'transparent');
+    g.addColorStop(1, artTheme.palette.ink);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
   }
 
   private drawCard(card: FxCard, stepped: number, stepIndex: number, camera: THREE.Camera): void {
@@ -186,7 +254,10 @@ export class ComicFx {
       alpha = 1 - k;
     }
 
-    const fontPx = (card.big ? Math.min(96, canvas.width * 0.085) : Math.min(52, canvas.width * 0.045)) * scale;
+    const fontPx =
+      (card.big ? Math.min(96, canvas.width * 0.085) : Math.min(52, canvas.width * 0.045)) *
+      scale *
+      card.scale;
     ctx.save();
     ctx.globalAlpha = Math.max(0, alpha);
     ctx.translate(x, y);
@@ -211,6 +282,14 @@ export class ComicFx {
     const rng = seededRng(card.seed + stepIndex * 101);
     this.wobblyRect(-w / 2, -h / 2, w, h, rng);
     ctx.fill();
+    // Big panels: swirl-paint fill clipped inside the wobbly border.
+    if (card.big && this.swirl?.active) {
+      ctx.save();
+      ctx.clip();
+      ctx.globalAlpha *= artTheme.swirl.panelFillAlpha;
+      ctx.drawImage(this.swirl.canvas, -w / 2, -h / 2, w, h);
+      ctx.restore();
+    }
     ctx.stroke();
 
     ctx.fillStyle = fg;
@@ -279,6 +358,8 @@ export class ComicFx {
         const dist = (26 + rng() * 40 * p.strength) * t;
         const size = (7 + rng() * 6) * (1 - t * 0.6);
         const jr = seededRng(p.seed + i * 13 + stepIndex * 7);
+        // Per-star twinkle on the step grid — stars flicker, never sit still.
+        ctx.globalAlpha = 1 - artTheme.fx.starTwinkle * jr();
         this.star(
           Math.cos(a) * dist + (jr() - 0.5) * 3,
           Math.sin(a) * dist * 0.7 + (jr() - 0.5) * 3,
@@ -286,6 +367,7 @@ export class ComicFx {
           artTheme.palette.star,
         );
       }
+      ctx.globalAlpha = 1;
     } else {
       const n = 3;
       ctx.strokeStyle = artTheme.palette.ink;

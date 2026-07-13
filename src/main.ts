@@ -31,6 +31,7 @@ import { SlingshotInput } from './input/slingshot';
 import { KeySteer } from './input/keySteer';
 import { loadControlMode, saveControlMode, type ControlMode } from './input/controlMode';
 import { Hud } from './ui/hud';
+import { applyThemeToCss } from './ui/themeBridge';
 import { loadBestRun, loadLeaderboard, loadStats, saveStats, pushRun } from './ui/persist';
 import { AudioBank } from './systems/audio';
 import { VerletNet } from './net/verletNet';
@@ -38,6 +39,8 @@ import { BallTrail } from './scene/trail';
 import { OutlineBoiler } from './scene/outlines';
 import { BlobShadow } from './scene/blobShadow';
 import { ComicFx } from './fx/comicFx';
+import { screenShake } from './fx/shake';
+import { SwirlCanvas } from './fx/swirl';
 import { PhysicsDebugRenderer } from './debug/physicsDebug';
 import { SwipeOverlay } from './debug/swipeOverlay';
 import { createDebugPanel } from './debug/panel';
@@ -48,6 +51,7 @@ import { loadArtOverrides } from './scene/artAssets';
 async function boot(): Promise<void> {
   // Saved theme overrides merge in before anything paints from artTheme.
   applySavedTheme();
+  applyThemeToCss();
   const artReview = artReviewFromUrl();
   const [, artOverrides] = await Promise.all([initRapier(), loadArtOverrides()]);
 
@@ -88,6 +92,8 @@ async function boot(): Promise<void> {
   let smearTimer = 0;
 
   const fx = new ComicFx(document.getElementById('fx-overlay') as HTMLCanvasElement);
+  const swirl = new SwirlCanvas();
+  fx.attachSwirl(swirl);
   let freezeTimer = 0;
 
   const scoring = new ScoringTracker();
@@ -114,10 +120,12 @@ async function boot(): Promise<void> {
     },
   );
   hud.setControlMode(controlMode);
+  hud.attachSwirl(swirl);
   const audio = new AudioBank();
   const net = new VerletNet(scene, hoop.rimCenter);
   const trail = new BallTrail(scene);
   const ballMat = ballMesh.material as THREE.MeshToonMaterial;
+  const rimMat = court.rimMesh.material as THREE.MeshToonMaterial;
   let boardTouched = false;
 
   // Cartoon layer: ink outlines that boil, plus the boiling court/blob textures.
@@ -139,15 +147,22 @@ async function boot(): Promise<void> {
     trail.setHeat(heat);
     if (heat === 'superstar') {
       ballMat.emissiveIntensity = 0.7; // hue cycles per-frame — rainbow ball
+      rimMat.emissiveIntensity = artTheme.heatFx.rimEmissiveSuperstar; // joins the cycle
     } else if (heat === 'fire') {
       ballMat.emissive.set(0xff4400);
       ballMat.emissiveIntensity = 0.55;
+      rimMat.emissive.set(0xff4400);
+      rimMat.emissiveIntensity = artTheme.heatFx.rimEmissiveFire;
     } else if (heat === 'warm') {
       ballMat.emissive.set(0x662200);
       ballMat.emissiveIntensity = 0.3;
+      rimMat.emissive.set(0x662200);
+      rimMat.emissiveIntensity = artTheme.heatFx.rimEmissiveWarm;
     } else {
       ballMat.emissive.set(0x000000);
       ballMat.emissiveIntensity = 0;
+      rimMat.emissive.set(0x000000);
+      rimMat.emissiveIntensity = 0;
     }
     audio.setCrowdLevel(heat === 'superstar' ? 1 : heat === 'fire' ? 0.85 : heat === 'warm' ? 0.35 : 0);
     fx.setFocusLines(heat === 'fire' || heat === 'superstar');
@@ -282,19 +297,45 @@ async function boot(): Promise<void> {
   const keySteer = new KeySteer();
   let keySteerHeld = false;
 
-  /** The annotated score receipt: base, each bonus, then the multiplied total. */
-  function showScoreMath(bd: ScoreBreakdown): void {
-    let delay = 130;
+  // Receipt/HUD timers from the previous resolve — cleared at the top of the
+  // next resolveShot so a stale deferred HUD roll can't fire after a reset.
+  let pendingFxTimers: number[] = [];
+  function clearPendingFx(): void {
+    for (const t of pendingFxTimers) clearTimeout(t);
+    pendingFxTimers = [];
+  }
+  function later(fn: () => void, ms: number): void {
+    pendingFxTimers.push(window.setTimeout(fn, ms));
+  }
+
+  /**
+   * The score receipt, numbers only: +base, each +bonus, the ×mult, then the
+   * +total — revealed one at a time (sequential causality), each term wearing
+   * its semantic color (artTheme.score — color, not text, says what a term
+   * is; the mapping never breaks). Returns the delay (ms) at which the total
+   * card lands, the receipt's climax beat.
+   */
+  function showScoreMath(bd: ScoreBreakdown): number {
+    let delay = artTheme.fx.receiptFirstMs;
     let stack = 1; // stack 0 is the onomatopoeia card
-    const spawn = (text: string, style: 'paper' | 'star' | 'accent'): void => {
+    const spawn = (text: string, style: 'base' | 'bonus' | 'mult' | 'total', scale = 1): void => {
       const s = stack++;
-      setTimeout(() => fx.card(text, hoop.rimCenter, { style, stack: s }), delay);
-      delay += 140;
+      later(() => {
+        fx.card(text, hoop.rimCenter, { style, stack: s, scale });
+        // Each term sounds its meaning: rising ticks, a ding for the ×mult,
+        // bass for the total — the receipt audibly climbs.
+        if (style === 'mult') audio.play('multhit', tuning.juice.multHitVolume, 0);
+        else if (style === 'total') audio.play('basshit', tuning.juice.bassHitVolume, 0);
+        else audio.playTick(s - 1);
+      }, delay);
+      delay += artTheme.fx.receiptStepMs;
     };
-    spawn(`+${bd.base}`, 'paper');
-    for (const b of bd.bonuses) spawn(`${b.label} +${b.points}`, 'star');
-    if (bd.multiplier > 1) spawn(`×${bd.multiplier} = ${bd.total}`, 'accent');
-    else if (bd.bonuses.length > 0) spawn(`= ${bd.total}`, 'accent');
+    spawn(`+${bd.base}`, 'base');
+    for (const b of bd.bonuses) spawn(`+${b.points}`, 'bonus');
+    if (bd.multiplier > 1) spawn(`×${bd.multiplier}`, 'mult');
+    if (bd.multiplier > 1 || bd.bonuses.length > 0)
+      spawn(`+${bd.total}`, 'total', artTheme.fx.receiptTotalScale);
+    return delay - artTheme.fx.receiptStepMs;
   }
 
   function starLabel(stars: number): string {
@@ -318,6 +359,7 @@ async function boot(): Promise<void> {
             curve: lastCurve,
           };
     const out = run.resolve(result, facts);
+    clearPendingFx();
     replay.attachSteerTimeline(steer.getTimeline());
     endSteerDrag();
     if (tuning.debug.shotLog) {
@@ -337,8 +379,7 @@ async function boot(): Promise<void> {
       applyHeatVisuals();
       if (boardTouched) {
         fx.card('BRICK!', hoop.rimCenter, { style: 'fire', burst: true });
-        document.body.classList.add('shake');
-        setTimeout(() => document.body.classList.remove('shake'), 220);
+        screenShake('small');
       } else if (scoring.hasRimContact) {
         fx.card('CLANK!', hoop.rimCenter, { style: 'fire' });
       }
@@ -354,7 +395,7 @@ async function boot(): Promise<void> {
         }
       }
       saveStats(stats);
-      hud.setRun(0, 0, 0);
+      hud.setRun(0, 0);
       hud.setHeat('cold');
       setTimeout(() => {
         run.nextShot();
@@ -378,23 +419,34 @@ async function boot(): Promise<void> {
     if (result === 'swish') fx.card('SWISH!!', hoop.rimCenter, { style: 'accent', burst: true });
     else if (boardTouched) fx.card('BANK!', hoop.rimCenter, { style: 'paper' });
     else fx.card('COUNT IT!', hoop.rimCenter, { style: 'paper' });
-    showScoreMath(bd);
+    // Shake NOW, with the onomatopoeia — before the receipt finishes rolling,
+    // so a big make is felt pre-cognitively. Tier scales with magnitude.
+    screenShake(
+      out.starMilestone !== null ||
+        run.heat === 'fire' ||
+        run.heat === 'superstar' ||
+        bd.total >= artTheme.shake.largeScore
+        ? 'large'
+        : result === 'swish' || boardTouched || bd.total >= artTheme.shake.mediumScore
+          ? 'medium'
+          : 'small',
+    );
+    const climaxMs = showScoreMath(bd);
 
     audio.play('swish', result === 'swish' ? 1 : 0.55, 0);
     net.ripple(result === 'swish' ? 0.07 : 0.04);
     if (out.starMilestone !== null) {
       // Star milestone: ~0.25 s freeze-frame + annotation panel.
       freezeTimer = artTheme.fx.freezeSec;
-      fx.panel(
-        starLabel(out.starMilestone),
-        `★${out.starMilestone} — ×${run.multiplier}`,
-        out.starMilestone >= 3 ? 'fire' : 'star',
-      );
+      fx.panel(starLabel(out.starMilestone), undefined, out.starMilestone >= 3 ? 'fire' : 'star');
       if (out.starMilestone >= 3) audio.play('swell', 1, 0);
     }
     applyHeatVisuals();
-    hud.setRun(run.runScore, run.streak, run.stars, true);
-    hud.setHeat(run.heat);
+    // The HUD roll fires as the receipt's total card lands — one climax beat.
+    later(() => {
+      hud.setRun(run.runScore, run.streak, true);
+      hud.setHeat(run.heat);
+    }, climaxMs);
     setTimeout(() => {
       run.nextShot();
       flyToNext();
@@ -571,9 +623,10 @@ async function boot(): Promise<void> {
           overlay.clearSteerState();
         }
       }
-      // Superstar: the rainbow ball — emissive hue cycles.
+      // Superstar: the rainbow ball — emissive hue cycles; the rim joins in.
       if (run.heat === 'superstar') {
         ballMat.emissive.setHSL((performance.now() * 0.0004) % 1, 0.9, 0.5);
+        rimMat.emissive.setHSL((performance.now() * 0.0004 + 0.35) % 1, 0.9, 0.5);
       }
       boiler.update(frameDt);
       blobShadow.update(ballRoot.position);
@@ -605,7 +658,7 @@ async function boot(): Promise<void> {
     rig.snapTo(currentPos);
   }
   run.beginAiming();
-  hud.setRun(0, 0, 0);
+  hud.setRun(0, 0);
   loop.start();
 }
 

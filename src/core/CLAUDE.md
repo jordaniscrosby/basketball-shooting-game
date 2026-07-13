@@ -1,5 +1,8 @@
 # src/core/ — loop + game state machine
 
+## ease.ts
+Shared easing vocabulary for visual tweens: `clamp01`, `easeOutCubic`, `easeInOutCubic`, `easeOutBack(t, s)` (the Balatro-style overshoot — lands past target, springs back; used by the HUD digit roll). Camera rig and HUD import from here — don't re-inline easings per file.
+
 ## loop.ts
 `class FixedLoop` — gaffer-style fixed-timestep accumulator. Calls `update(dt)` zero-or-more times per animation frame at exactly `h = 1/tuning.world.stepHz` (60 Hz), then `render(alpha, frameDt)` once, where `alpha` is the leftover accumulator fraction for interpolation. `frameDt` is clamped to `tuning.world.maxFrameDt` (spiral-of-death guard). Public `smoothedFps` EMA for the readout.
 

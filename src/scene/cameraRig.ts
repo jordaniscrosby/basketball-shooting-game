@@ -2,10 +2,7 @@ import * as THREE from 'three';
 import { tuning } from '../config/tuning';
 import type { ShotPosition } from '../config/positions';
 import { launchPointFor } from '../config/positions';
-
-const easeInOutCubic = (t: number): number =>
-  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
+import { easeInOutCubic, easeOutCubic } from '../core/ease';
 
 /**
  * Hoop-centered camera rig. Behind-ball hover at each position (auto-aligned
