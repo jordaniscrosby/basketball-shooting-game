@@ -123,8 +123,8 @@ export function createDebugPanel(hooks: PanelHooks): GUI {
   input.close();
 
   const sling = gui.addFolder('slingshot');
-  tip(sling.add(tuning.slingshot, 'grabRadius', 0.05, 1, 0.01),
-    'How close to the ball (screen-height units) a press must land to grab it for the slingshot.');
+  tip(sling.add(tuning.slingshot, 'grabRadius', 0.05, 9, 0.05),
+    'How close to the ball (screen-height units) a press must land to grab the slingshot. Large = press anywhere.');
   tip(sling.add(tuning.slingshot, 'minDragFrac', 0.01, 0.2, 0.005),
     'Minimum pull-back (fraction of screen height) for a valid shot.');
   tip(sling.add(tuning.slingshot, 'referenceDragFrac', 0.05, 0.5, 0.01),

@@ -120,13 +120,14 @@ export const tuning = {
     lateralMax: 0.12,
   },
 
-  /** Mouse slingshot aim (press the ball, pull back, release to fire). */
+  /** Mouse slingshot aim (press anywhere, pull back, release to fire). */
   slingshot: {
     /**
      * Press must land within this distance of the ball's screen position
      * (viewport-height units, aspect-corrected) — the slingshot grab.
+     * Large value = press anywhere on screen (default, mirrors curve.grabRadius).
      */
-    grabRadius: 0.3,
+    grabRadius: 9,
     /** Min net-downward pull (viewport-height fraction) for a valid shot. */
     minDragFrac: 0.03,
     /**

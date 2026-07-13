@@ -15,7 +15,7 @@ export interface SlingshotDrag {
 export interface SlingshotCallbacks {
   /** Gate at pointer-down: slingshot mode selected and the run is aiming. */
   active: () => boolean;
-  /** Press must land near the ball (viewport fractions). */
+  /** Press must land within tuning.slingshot.grabRadius of the ball (viewport fractions) — large radius = anywhere. */
   grabCheck: (x: number, y: number) => boolean;
   /** Live feedback while pulling (guide line + power meter). */
   onDrag: (d: SlingshotDrag) => void;
@@ -25,7 +25,7 @@ export interface SlingshotCallbacks {
 }
 
 /**
- * Mouse/keyboard aim: press on the ball, pull down-and-back like a slingshot,
+ * Mouse/keyboard aim: press anywhere, pull down-and-back like a slingshot,
  * release to fire opposite the pull. Emits the same Gesture the swipe path
  * produces, so the assisted-aim mapping (aimShot) is shared untouched:
  *   - pull direction off vertical → azimuth (lateral aim),
