@@ -5,12 +5,13 @@ import { toonMaterial, seededRng } from './toon';
 
 /**
  * Cartoon basketball: flat orange cel with bold, slightly wobbly ink seams —
- * the seam texture is what makes backspin readable in flight.
+ * the seam texture is what makes backspin readable in flight. An authored
+ * `public/art/ball.png` (equirect, see artAssets.ts) replaces the painting.
  */
-export function createBallMesh(): THREE.Mesh {
+export function createBallMesh(skinOverride?: THREE.Texture): THREE.Mesh {
   return new THREE.Mesh(
     new THREE.SphereGeometry(tuning.ball.radius, 48, 32),
-    toonMaterial({ map: paintBallTexture() }),
+    toonMaterial({ map: skinOverride ?? paintBallTexture() }),
   );
 }
 

@@ -41,16 +41,22 @@ import { ComicFx } from './fx/comicFx';
 import { PhysicsDebugRenderer } from './debug/physicsDebug';
 import { SwipeOverlay } from './debug/swipeOverlay';
 import { createDebugPanel } from './debug/panel';
+import { applySavedTheme } from './debug/themeStore';
+import { artReviewFromUrl, applyArtReview } from './debug/artReview';
+import { loadArtOverrides } from './scene/artAssets';
 
 async function boot(): Promise<void> {
-  await initRapier();
+  // Saved theme overrides merge in before anything paints from artTheme.
+  applySavedTheme();
+  const artReview = artReviewFromUrl();
+  const [, artOverrides] = await Promise.all([initRapier(), loadArtOverrides()]);
 
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const { scene, camera, renderer } = createScene(canvas);
   const physics = createPhysicsWorld();
   const debugRenderer = new PhysicsDebugRenderer(scene);
   const overlay = new SwipeOverlay(document.getElementById('swipe-overlay') as HTMLCanvasElement);
-  const court = createCourt(scene);
+  const court = createCourt(scene, artOverrides);
   let hoop = createHoop(physics.world);
   let rimHandles = new Set(hoop.rimColliders.map((c) => c.handle));
 
@@ -59,7 +65,7 @@ async function boot(): Promise<void> {
   // Ball hierarchy: root carries position, stretch node carries the
   // velocity-aligned squash & stretch (visual only — collider untouched),
   // the mesh inside carries the body's spin.
-  const ballMesh = createBallMesh();
+  const ballMesh = createBallMesh(artOverrides.ball);
   const ballStretch = new THREE.Group();
   const ballRoot = new THREE.Group();
   ballStretch.add(ballMesh);
@@ -573,7 +579,7 @@ async function boot(): Promise<void> {
       blobShadow.update(ballRoot.position);
       net.render(camera);
       trail.render(camera);
-      rig.update(frameDt);
+      if (!artReview) rig.update(frameDt);
       debugRenderer.update(physics.world);
       overlay.render(frameDt, camera);
       fx.render(frameDt, camera);
@@ -587,8 +593,17 @@ async function boot(): Promise<void> {
   });
 
   // Spawn: hold at the first position, snap the camera, start aiming.
-  holdBallAt(currentPos);
-  rig.snapTo(currentPos);
+  if (artReview) {
+    // Art review: deterministic position (free throw), fixed preset camera,
+    // frozen boil, no HUD — reproducible screenshots for art iteration.
+    currentPos = positions[0]!;
+    holdBallAt(currentPos);
+    applyArtReview(artReview, camera, launchPointFor(currentPos), hoop.rimCenter);
+    document.body.classList.add('art-review');
+  } else {
+    holdBallAt(currentPos);
+    rig.snapTo(currentPos);
+  }
   run.beginAiming();
   hud.setRun(0, 0, 0);
   loop.start();

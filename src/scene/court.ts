@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { tuning, derived } from '../config/tuning';
 import { artTheme } from '../config/artTheme';
 import { toonMaterial, seededRng } from './toon';
+import type { ArtOverrides } from './artAssets';
 
 export interface CourtVisual {
   group: THREE.Group;
@@ -22,19 +23,25 @@ export interface CourtVisual {
  * line boil), grass lawn with paved trails, painted countryside backdrop,
  * a bench and a cow. Visual hoop stays aligned to the procedural colliders —
  * both read the same tuning values.
+ *
+ * Every painted texture has an authored-override slot (see artAssets.ts):
+ * an override replaces the procedural painting AND its boil variants (an
+ * authored texture doesn't boil — only its ink outline hulls do).
  */
-export function createCourt(scene: THREE.Scene): CourtVisual {
+export function createCourt(scene: THREE.Scene, art: ArtOverrides = {}): CourtVisual {
   const group = new THREE.Group();
 
+  const floorOverride = art['court-floor'];
+  const boardOverride = art['backboard'];
   const floorVariants: THREE.CanvasTexture[] = [];
   const boardVariants: THREE.CanvasTexture[] = [];
   for (let v = 0; v < artTheme.boil.variants; v++) {
-    floorVariants.push(paintCourtTexture(0xc0947 + v * 131));
-    boardVariants.push(paintBackboardTexture(0xb0a4d + v * 733));
+    if (!floorOverride) floorVariants.push(paintCourtTexture(0xc0947 + v * 131));
+    if (!boardOverride) boardVariants.push(paintBackboardTexture(0xb0a4d + v * 733));
   }
 
   // Flat fills want no lighting at all — MeshBasicMaterial is the "painted cel".
-  const floorMat = new THREE.MeshBasicMaterial({ map: floorVariants[0]! });
+  const floorMat = new THREE.MeshBasicMaterial({ map: floorOverride ?? floorVariants[0]! });
   const floorMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(tuning.court.width, tuning.court.length),
     floorMat,
@@ -46,19 +53,19 @@ export function createCourt(scene: THREE.Scene): CourtVisual {
   // winding paved trails.
   const apron = new THREE.Mesh(
     new THREE.PlaneGeometry(80, 80),
-    new THREE.MeshBasicMaterial({ map: paintGrassTexture(0x9a55e) }),
+    new THREE.MeshBasicMaterial({ map: art['grass'] ?? paintGrassTexture(0x9a55e) }),
   );
   apron.rotation.x = -Math.PI / 2;
   apron.position.y = -0.002;
   group.add(apron);
 
-  const backdrop = buildBackdrop();
+  const backdrop = buildBackdrop(art['backdrop']);
   group.add(backdrop);
 
-  const props = buildParkProps();
+  const props = buildParkProps(art);
   group.add(props.group);
 
-  const hoop = buildHoopVisual(boardVariants);
+  const hoop = buildHoopVisual(boardVariants, boardOverride);
   group.add(hoop.group);
 
   scene.add(group);
@@ -71,13 +78,16 @@ export function createCourt(scene: THREE.Scene): CourtVisual {
     propMeshes: props.outlined,
     applyBoilFrame(frame: number) {
       const i = frame % artTheme.boil.variants;
-      floorMat.map = floorVariants[i]!;
-      hoop.boardFaceMat.map = boardVariants[i]!;
+      if (!floorOverride) floorMat.map = floorVariants[i]!;
+      if (!boardOverride) hoop.boardFaceMat.map = boardVariants[i]!;
     },
   };
 }
 
-function buildHoopVisual(boardVariants: THREE.CanvasTexture[]): {
+function buildHoopVisual(
+  boardVariants: THREE.CanvasTexture[],
+  boardOverride?: THREE.CanvasTexture,
+): {
   group: THREE.Group;
   rim: THREE.Mesh;
   board: THREE.Mesh;
@@ -101,7 +111,7 @@ function buildHoopVisual(boardVariants: THREE.CanvasTexture[]): {
   group.add(rim);
 
   // Backboard: opaque paper white with hand-drawn border + shooter's square.
-  const boardFaceMat = toonMaterial({ map: boardVariants[0]! });
+  const boardFaceMat = toonMaterial({ map: boardOverride ?? boardVariants[0]! });
   const plain = () => toonMaterial({ color: artTheme.palette.backboard });
   const board = new THREE.Mesh(
     new THREE.BoxGeometry(bb.width, bb.height, bb.thickness),
@@ -145,7 +155,20 @@ function buildHoopVisual(boardVariants: THREE.CanvasTexture[]): {
  */
 const BACKDROP_KX = 0.65;
 
-function buildBackdrop(): THREE.Mesh {
+function buildBackdrop(override?: THREE.CanvasTexture): THREE.Mesh {
+  const tex = override ?? paintBackdropTexture();
+  // Inward-facing wall: u = 0 sits at +z, behind the player; u = 0.5 is the
+  // view straight past the hoop. Grass at the canvas bottom meets the lawn,
+  // sky at the top meets scene.background — no visible edges anywhere.
+  const mesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(30, 30, 19, 96, 1, true),
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide }),
+  );
+  mesh.position.set(0, 9.5, 0);
+  return mesh;
+}
+
+function paintBackdropTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 4096;
   c.height = 640;
@@ -247,15 +270,7 @@ function buildBackdrop(): THREE.Mesh {
 
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  // Inward-facing wall: u = 0 sits at +z, behind the player; u = 0.5 is the
-  // view straight past the hoop. Grass at the canvas bottom meets the lawn,
-  // sky at the top meets scene.background — no visible edges anywhere.
-  const mesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(30, 30, 19, 96, 1, true),
-    new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide }),
-  );
-  mesh.position.set(0, 9.5, 0);
-  return mesh;
+  return tex;
 }
 
 /** Fill from a silhouette polyline down to the canvas bottom. */
@@ -464,7 +479,7 @@ function paintTrail(
 }
 
 /** Park furniture + livestock: a bench facing the court and a grazing cow. */
-function buildParkProps(): { group: THREE.Group; outlined: THREE.Mesh[] } {
+function buildParkProps(art: ArtOverrides): { group: THREE.Group; outlined: THREE.Mesh[] } {
   const group = new THREE.Group();
   const outlined: THREE.Mesh[] = [];
   const P = artTheme.palette;
@@ -492,7 +507,7 @@ function buildParkProps(): { group: THREE.Group; outlined: THREE.Mesh[] } {
   group.add(bench);
 
   // The resident cow, grazing on the lawn between the court and the trail.
-  const cow = buildCow(outlined);
+  const cow = buildCow(outlined, art['cow-hide']);
   cow.position.set(10.5, 0, -14.2);
   cow.rotation.y = -Math.PI / 3;
   group.add(cow);
@@ -501,7 +516,7 @@ function buildParkProps(): { group: THREE.Group; outlined: THREE.Mesh[] } {
 }
 
 /** Boxy cartoon cow: spotted hide texture, pink muzzle, ink hooves. */
-function buildCow(outlined: THREE.Mesh[]): THREE.Group {
+function buildCow(outlined: THREE.Mesh[], hideOverride?: THREE.CanvasTexture): THREE.Group {
   const g = new THREE.Group();
   const P = artTheme.palette;
   const white = () => toonMaterial({ color: P.paper });
@@ -509,7 +524,7 @@ function buildCow(outlined: THREE.Mesh[]): THREE.Group {
 
   const body = new THREE.Mesh(
     new THREE.BoxGeometry(1.55, 0.85, 0.8),
-    toonMaterial({ map: paintCowHide(0xc0ffee) }),
+    toonMaterial({ map: hideOverride ?? paintCowHide(0xc0ffee) }),
   );
   body.position.set(0, 1.0, 0);
   g.add(body);

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-"Streak" — a 3D swipe-to-shoot basketball game. Three.js rendering + Rapier physics + TypeScript, no framework, no bundler config beyond Vite defaults. Comic-ink hand-drawn art style. Design docs live in the Obsidian vault under "Basketball Shooting Game".
+"Streak" — a 3D swipe-to-shoot basketball game. Three.js rendering + Rapier physics + TypeScript, no framework, no bundler config beyond Vite defaults. Comic-ink hand-drawn art style.
 
 ## Commands
 
@@ -26,19 +26,19 @@ Tests are Vitest, colocated as `*.test.ts` next to their modules. All are pure-m
 
 Each directory has its own CLAUDE.md with per-file detail. Read the one for the area you're touching:
 
-| Directory | Owns | CLAUDE.md |
-|---|---|---|
-| `src/config/` | ALL constants: `tuning.ts` (physics/gameplay), `artTheme.ts` (visual), `positions.ts` (shot pool) | [src/config/CLAUDE.md](src/config/CLAUDE.md) |
-| `src/core/` | Fixed-timestep loop, `GameRun` state machine | [src/core/CLAUDE.md](src/core/CLAUDE.md) |
-| `src/input/` | Swipe / slingshot / WASD input, velocity estimator, shared `Gesture` contract | [src/input/CLAUDE.md](src/input/CLAUDE.md) |
-| `src/physics/` | Rapier world, ball body, hoop colliders | [src/physics/CLAUDE.md](src/physics/CLAUDE.md) |
+| Directory      | Owns                                                                                                           | CLAUDE.md                                      |
+| -------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `src/config/`  | ALL constants: `tuning.ts` (physics/gameplay), `artTheme.ts` (visual), `positions.ts` (shot pool)              | [src/config/CLAUDE.md](src/config/CLAUDE.md)   |
+| `src/core/`    | Fixed-timestep loop, `GameRun` state machine                                                                   | [src/core/CLAUDE.md](src/core/CLAUDE.md)       |
+| `src/input/`   | Swipe / slingshot / WASD input, velocity estimator, shared `Gesture` contract                                  | [src/input/CLAUDE.md](src/input/CLAUDE.md)     |
+| `src/physics/` | Rapier world, ball body, hoop colliders                                                                        | [src/physics/CLAUDE.md](src/physics/CLAUDE.md) |
 | `src/systems/` | The shot pipeline: aim, solver, spin, curve steering, scoring, score engine, scheduler, replay, battery, audio | [src/systems/CLAUDE.md](src/systems/CLAUDE.md) |
-| `src/net/` | Visual-only Verlet net | [src/net/CLAUDE.md](src/net/CLAUDE.md) |
-| `src/scene/` | Rendering + comic-ink art stack: toon cel shading, boiling outlines, court, camera rig, trail | [src/scene/CLAUDE.md](src/scene/CLAUDE.md) |
-| `src/fx/` | 2D-canvas comic overlay (onomatopoeia cards, freeze panels) | [src/fx/CLAUDE.md](src/fx/CLAUDE.md) |
-| `src/debug/` | lil-gui panel, physics wireframe, swipe overlay | [src/debug/CLAUDE.md](src/debug/CLAUDE.md) |
-| `src/ui/` | DOM HUD, localStorage persistence | [src/ui/CLAUDE.md](src/ui/CLAUDE.md) |
-| `scripts/` | `genAudio.mjs` SFX synthesizer | [scripts/CLAUDE.md](scripts/CLAUDE.md) |
+| `src/net/`     | Visual-only Verlet net                                                                                         | [src/net/CLAUDE.md](src/net/CLAUDE.md)         |
+| `src/scene/`   | Rendering + comic-ink art stack: toon cel shading, boiling outlines, court, camera rig, trail                  | [src/scene/CLAUDE.md](src/scene/CLAUDE.md)     |
+| `src/fx/`      | 2D-canvas comic overlay (onomatopoeia cards, freeze panels)                                                    | [src/fx/CLAUDE.md](src/fx/CLAUDE.md)           |
+| `src/debug/`   | lil-gui panel, physics wireframe, swipe overlay                                                                | [src/debug/CLAUDE.md](src/debug/CLAUDE.md)     |
+| `src/ui/`      | DOM HUD, localStorage persistence                                                                              | [src/ui/CLAUDE.md](src/ui/CLAUDE.md)           |
+| `scripts/`     | `genAudio.mjs` SFX synthesizer                                                                                 | [scripts/CLAUDE.md](scripts/CLAUDE.md)         |
 
 ## Architecture
 
@@ -50,7 +50,7 @@ Each directory has its own CLAUDE.md with per-file detail. Read the one for the 
 
 1. `scheduler.pickNextPosition()` picks a spot; `positions.launchPointFor()` gives the launch point.
 2. Input emits a `Gesture` (shared contract in `input/swipe.ts` — both swipe and slingshot produce it).
-3. `aim.aimShot()` solves the perfect 45°-entry arc (`shotSolver.solveToRim()`), then the gesture *perturbs* it: azimuth → lateral error, flick speed → clamped power, curvature → sidespin. Misses are always explainable (`[shot]` console log).
+3. `aim.aimShot()` solves the perfect 45°-entry arc (`shotSolver.solveToRim()`), then the gesture _perturbs_ it: azimuth → lateral error, flick speed → clamped power, curvature → sidespin. Misses are always explainable (`[shot]` console log).
 4. Per fixed step in flight: `curve.FlightSteer.step()` (WASD/drag air steering with a Δv budget) → `spin.applyFlightForces()` (the SINGLE owner of Rapier persistent forces: resets then adds Magnus + steering) → `world.step()`.
 5. Collision events classified by collider handle → rim/board contacts feed scoring marks, FX, audio.
 6. `scoring.ScoringTracker.update()` detects make/swish via two virtual crossing planes (no Rapier sensors); floor-hit or 6 s timeout = miss.
@@ -59,6 +59,7 @@ Each directory has its own CLAUDE.md with per-file detail. Read the one for the 
 **Constants discipline (the most important convention):** every physical/gameplay number lives in `src/config/tuning.ts`; every visual/style number lives in `src/config/artTheme.ts`. Nothing else hardcodes a constant. The lil-gui debug panel binds directly to these objects for live editing. Tuning is "the artifact that survives the iOS rewrite."
 
 **Key invariants:**
+
 - A miss ends the RUN (streak/score → 0) but not the session; `gameover` phase is reachable only via `GameRun.endSession()`. `GameRun.assert()` throws on out-of-order phase transitions.
 - The zero-steer flight path stays bit-identical to no-curve builds (idle `FlightSteer.step()` returns null, `applyFlightForces` adds nothing).
 - The Verlet net and all of `scene/` are visual-only — never gameplay colliders.
@@ -73,3 +74,14 @@ Each directory has its own CLAUDE.md with per-file detail. Read the one for the 
 - Systems modules take structural interfaces (e.g. `ForceBody`, `BallSample`), not Rapier types, so they stay pure and unit-testable without booting Rapier.
 - Randomness used for gameplay (scheduler) takes an injectable `rng`; visual randomness uses seeded/deterministic hashes (`toon.hash01`, `seededRng`).
 - Browser API access (`localStorage`, `matchMedia`, `setPointerCapture`) is always try/catch-guarded with graceful fallbacks.
+
+## Art asset workflow
+
+- Authored PNG texture overrides live in `public/art/` (slot spec: `public/art/README.md`) — hand-authored files, **never generate or overwrite them**. Loader: `src/scene/artAssets.ts`, procedural fallback per slot.
+- `?art=ball|hoop|wide|court|bench|cow|backdrop` = art-review mode: fixed camera, frozen boil, no HUD — reproducible screenshots for before/after art comparison (`src/debug/artReview.ts`).
+- Live theme tuning: debug panel art folder → "apply theme (save + reload)" persists edits locally; "copy theme JSON" exports the diff to commit into `artTheme.ts` (`src/debug/themeStore.ts`).
+- Process doc: vault "Basketball Shooting Game/Art Assets & Workflow".
+
+## Documentation and planning
+
+- Design docs and plans live in the Obsidian vault under "Basketball Shooting Game".
