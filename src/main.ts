@@ -3,9 +3,11 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { tuning } from './config/tuning';
 import { getPositions, launchPointFor, type ShotPosition } from './config/positions';
 import { FixedLoop } from './core/loop';
+import { GameRun } from './core/state';
 import { createScene } from './scene/scene';
 import { createCourt } from './scene/court';
 import { createBallMesh } from './scene/ballVisual';
+import { CameraRig } from './scene/cameraRig';
 import {
   initRapier,
   createPhysicsWorld,
@@ -20,12 +22,12 @@ import { aimShot, classifyShot } from './systems/aim';
 import { applyMagnus } from './systems/spin';
 import { ShotReplay } from './systems/shotReplay';
 import { runShotBattery } from './systems/shotBattery';
-import { SwipeInput } from './input/swipe';
+import { pickNextPosition } from './systems/scheduler';
+import { SwipeInput, type Gesture } from './input/swipe';
+import { Hud, loadBest, saveBest } from './ui/hud';
 import { PhysicsDebugRenderer } from './debug/physicsDebug';
 import { SwipeOverlay } from './debug/swipeOverlay';
 import { createDebugPanel } from './debug/panel';
-
-type Phase = 'aiming' | 'flight' | 'resolved';
 
 async function boot(): Promise<void> {
   await initRapier();
@@ -46,12 +48,12 @@ async function boot(): Promise<void> {
 
   const scoring = new ScoringTracker();
   const replay = new ShotReplay();
+  const rig = new CameraRig(camera, hoop.rimCenter);
+  const run = new GameRun(loadBest());
+  const hud = new Hud(() => retry());
 
-  let phase: Phase = 'aiming';
-  let currentPos: ShotPosition = positions[0]!;
+  let currentPos: ShotPosition = pickNextPosition(positions, 0, 0, null);
   let flightTimer = 0;
-  let score = 0;
-  const streakEl = document.getElementById('streak-counter')!;
 
   function holdBallAt(pos: ShotPosition): void {
     const launch = launchPointFor(pos);
@@ -64,56 +66,77 @@ async function boot(): Promise<void> {
     scoring.reset();
   }
 
-  function placeCamera(pos: ShotPosition): void {
-    const launch = launchPointFor(pos);
-    const toHoop = new THREE.Vector3().subVectors(hoop.rimCenter, launch).setY(0).normalize();
-    camera.position
-      .copy(launch)
-      .addScaledVector(toHoop, -tuning.camera.back)
-      .setY(launch.y + tuning.camera.up - tuning.game.releaseHeight + 1.6);
-    camera.lookAt(hoop.rimCenter.x, hoop.rimCenter.y + 0.15, hoop.rimCenter.z);
+  function flyToNext(): void {
+    currentPos = pickNextPosition(positions, run.makes, run.shotIndex, currentPos);
+    holdBallAt(currentPos);
+    rig.flyTo(currentPos, () => run.beginAiming());
   }
 
-  function goToPosition(pos: ShotPosition): void {
-    currentPos = pos;
-    holdBallAt(pos);
-    placeCamera(pos);
-    phase = 'aiming';
+  function retry(): void {
+    run.retry();
+    hud.hideScoreScreen();
+    hud.setScore(0);
+    hud.setHeat('cold');
+    currentPos = pickNextPosition(positions, 0, 0, currentPos);
+    holdBallAt(currentPos);
+    rig.snapTo(currentPos);
+    run.beginAiming();
   }
 
-  function nextPosition(): void {
-    let next = currentPos;
-    while (next === currentPos) next = positions[Math.floor(Math.random() * positions.length)]!;
-    goToPosition(next);
-  }
-
-  const swipe = new SwipeInput(canvas, {
-    onMove: (samples) => overlay.showLive(samples),
-    onGesture: (g) => {
-      if (phase !== 'aiming') return;
-      const launch = launchPointFor(currentPos);
-      const shot = aimShot(launch, hoop.rimCenter, g);
-      const body = ball.tracked.body;
-      body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-      body.setLinvel({ x: shot.velocity.x, y: shot.velocity.y, z: shot.velocity.z }, true);
-      body.setAngvel(
-        { x: shot.angularVelocity.x, y: shot.angularVelocity.y, z: shot.angularVelocity.z },
-        true,
+  function fireShot(g: Gesture): void {
+    const launch = launchPointFor(currentPos);
+    const shot = aimShot(launch, hoop.rimCenter, g);
+    const body = ball.tracked.body;
+    body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    body.setLinvel({ x: shot.velocity.x, y: shot.velocity.y, z: shot.velocity.z }, true);
+    body.setAngvel(
+      { x: shot.angularVelocity.x, y: shot.angularVelocity.y, z: shot.angularVelocity.z },
+      true,
+    );
+    replay.record(launch, shot.velocity, shot.angularVelocity);
+    overlay.showRelease(shot, launch, g.samples);
+    run.release();
+    flightTimer = 0;
+    rig.startReleasePush();
+    if (tuning.debug.shotLog) {
+      console.log(
+        `[shot] ${currentPos.id} ${classifyShot(shot)} power=${shot.power.toFixed(3)} ` +
+          `lat=${((shot.lateralError * 180) / Math.PI).toFixed(2)}°`,
       );
-      replay.record(launch, shot.velocity, shot.angularVelocity);
-      overlay.showRelease(shot, launch, g.samples);
-      phase = 'flight';
-      flightTimer = 0;
-      if (tuning.debug.shotLog) {
-        console.log(
-          `[shot] ${currentPos.id} ${classifyShot(shot)} power=${shot.power.toFixed(3)} ` +
-            `lat=${((shot.lateralError * 180) / Math.PI).toFixed(2)}° ` +
-            `spin=${shot.sidespin.toFixed(2)} v0=${shot.velocity.length().toFixed(2)}m/s`,
-        );
-      }
+    }
+  }
+
+  new SwipeInput(canvas, {
+    onMove: (samples) => {
+      if (run.phase === 'aiming') overlay.showLive(samples);
+    },
+    onGesture: (g) => {
+      if (run.phase === 'aiming') fireShot(g);
     },
   });
-  void swipe;
+
+  function resolveShot(result: 'swish' | 'make' | 'miss'): void {
+    if (run.phase !== 'flight') return;
+    const out = run.resolve(result);
+    if (tuning.debug.shotLog) console.log(`[result] ${result}`);
+    if (out.gameOver) {
+      saveBest(run.best);
+      setTimeout(() => hud.showScoreScreen(run.score, run.best, run.isNewBest), 700);
+      return;
+    }
+    hud.setScore(run.score, true);
+    hud.setHeat(run.heat);
+    hud.floatAtHoop(
+      result === 'swish' ? `SWISH +${out.points}` : `+${out.points}`,
+      result === 'swish',
+      hoop.rimCenter,
+      camera,
+    );
+    setTimeout(() => {
+      run.nextShot();
+      flyToNext();
+    }, 550);
+  }
 
   createDebugPanel({
     applyMaterials: () => {
@@ -130,12 +153,13 @@ async function boot(): Promise<void> {
       rimHandles = new Set(hoop.rimColliders.map((c) => c.handle));
     },
     replayShot: () => {
-      if (!replay.hasShot) return;
+      if (!replay.hasShot || run.phase !== 'aiming') return;
       ball.tracked.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
       scoring.reset();
       replay.fire(ball);
-      phase = 'flight';
+      run.release();
       flightTimer = 0;
+      rig.startReleasePush();
     },
     runBattery: () => {
       void runShotBattery().then((r) => {
@@ -148,28 +172,17 @@ async function boot(): Promise<void> {
   const fpsEl = document.getElementById('fps')!;
   let fpsTimer = 0;
 
-  function resolveShot(result: 'swish' | 'make' | 'miss'): void {
-    if (phase !== 'flight') return;
-    phase = 'resolved';
-    if (result !== 'miss') {
-      score += result === 'swish' ? tuning.game.pointsSwish : tuning.game.pointsMake;
-      streakEl.textContent = String(score);
-    }
-    if (tuning.debug.shotLog) console.log(`[result] ${result}`);
-    setTimeout(() => nextPosition(), 650);
-  }
-
   const loop = new FixedLoop({
     update: (dt) => {
       physics.world.gravity = { x: 0, y: -tuning.world.gravity, z: 0 };
-      if (phase === 'flight') applyMagnus(ball.tracked.body);
+      if (run.phase === 'flight') applyMagnus(ball.tracked.body);
       physics.world.step(physics.events);
       physics.events.drainCollisionEvents((h1, h2, started) => {
         if (started && (rimHandles.has(h1) || rimHandles.has(h2))) scoring.markRimContact();
       });
       snapshotBody(ball.tracked);
 
-      if (phase === 'flight') {
+      if (run.phase === 'flight') {
         flightTimer += dt;
         const p = ball.tracked.body.translation();
         const v = ball.tracked.body.linvel();
@@ -180,19 +193,12 @@ async function boot(): Promise<void> {
           hoop.rimCenter.z,
         );
         if (ev) resolveShot(ev);
-        else if (flightTimer > 6) resolveShot('miss');
-        else if (
-          flightTimer > 1 &&
-          p.y < tuning.ball.radius * 1.6 &&
-          Math.abs(v.y) < 0.4 &&
-          Math.hypot(v.x, v.z) < 2
-        ) {
-          resolveShot('miss');
-        }
+        else if (p.y < tuning.ball.radius * 1.2 || flightTimer > 6) resolveShot('miss');
       }
     },
     render: (alpha, frameDt) => {
       applyInterpolated(ball.tracked, ballMesh, alpha);
+      rig.update(frameDt);
       debugRenderer.update(physics.world);
       overlay.render(frameDt, camera);
       fpsTimer += frameDt;
@@ -204,7 +210,11 @@ async function boot(): Promise<void> {
     },
   });
 
-  goToPosition(positions[0]!);
+  // Spawn: hold at the first position, snap the camera, start aiming.
+  holdBallAt(currentPos);
+  rig.snapTo(currentPos);
+  run.beginAiming();
+  hud.setScore(0);
   loop.start();
 }
 
