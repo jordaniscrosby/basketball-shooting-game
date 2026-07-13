@@ -99,7 +99,8 @@ export class SwipeInput {
 
   private readonly onUp = (e: PointerEvent): void => {
     if (!this.active || e.pointerId !== this.pointerId) return;
-    this.push(e);
+    // Android-parity: the up event is NOT fed to the estimator — it repeats
+    // the last move's position a beat later and drags release velocity to 0.
     this.active = false;
     try {
       this.el.releasePointerCapture(e.pointerId);

@@ -50,6 +50,13 @@ export function createDebugPanel(hooks: PanelHooks): GUI {
   input.add(tuning.input, 'referenceFlickSpeed', 0.5, 4, 0.05);
   input.close();
 
+  const sling = gui.addFolder('slingshot');
+  sling.add(tuning.slingshot, 'grabRadius', 0.05, 1, 0.01);
+  sling.add(tuning.slingshot, 'minDragFrac', 0.01, 0.2, 0.005);
+  sling.add(tuning.slingshot, 'referenceDragFrac', 0.05, 0.5, 0.01);
+  sling.add(tuning.slingshot, 'maxDragFrac', 0.1, 0.6, 0.01);
+  sling.close();
+
   const curve = gui.addFolder('curve');
   curve.add(tuning.curve, 'enabled');
   curve.add(tuning.curve, 'lateralGain', 0, 20, 0.1);
@@ -57,6 +64,7 @@ export function createDebugPanel(hooks: PanelHooks): GUI {
   curve.add(tuning.curve, 'budget', 0, 5, 0.05);
   curve.add(tuning.curve, 'maxAccel', 0, 25, 0.25);
   curve.add(tuning.curve, 'grabRadius', 0.05, 9, 0.05);
+  curve.add(tuning.curve, 'keySpeed', 0, 4, 0.05);
   curve.add(tuning.curve, 'cutoffAfterContact');
   curve.add(tuning.curve, 'fadeBelowFrac', 0, 1, 0.01);
   curve.add(tuning.curve, 'visualSpinGain', 0, 4, 0.05);

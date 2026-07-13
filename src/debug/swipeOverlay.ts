@@ -15,6 +15,14 @@ export class SwipeOverlay {
   private arc: THREE.Vector3[] = [];
   private steer: { budgetFrac: number; vx: number; vy: number; bx: number; by: number } | null =
     null;
+  private sling: {
+    bx: number;
+    by: number;
+    dx: number;
+    dy: number;
+    len: number;
+    valid: boolean;
+  } | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -64,9 +72,26 @@ export class SwipeOverlay {
     this.steer = null;
   }
 
+  /**
+   * Slingshot pull feedback (gameplay UI, not debug-gated): rubber band to the
+   * grip, dashed aim guide opposite the pull, and a power meter with a notch
+   * at the solved-perfect pull length.
+   */
+  showSlingshot(
+    ballScreen: { x: number; y: number },
+    drag: { dx: number; dy: number; len: number; valid: boolean },
+  ): void {
+    this.sling = { bx: ballScreen.x, by: ballScreen.y, ...drag };
+  }
+
+  clearSlingshot(): void {
+    this.sling = null;
+  }
+
   render(dt: number, camera: THREE.Camera): void {
     const { ctx, canvas } = this;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    this.renderSlingshot();
     this.renderSteer();
     if (this.fade <= 0 || !tuning.debug.swipeOverlay) return;
     this.fade = Math.max(0, this.fade - dt);
@@ -98,6 +123,85 @@ export class SwipeOverlay {
     }
 
     this.renderArc(camera);
+  }
+
+  private renderSlingshot(): void {
+    const { ctx, canvas } = this;
+    const s = this.sling;
+    if (!s) return;
+    const ss = tuning.slingshot;
+    const x0 = s.bx * canvas.width;
+    const y0 = s.by * canvas.height;
+    const px = x0 + s.dx * canvas.width;
+    const py = y0 + s.dy * canvas.height;
+
+    // Rubber band: ball → grip. Fades when the pull wouldn't fire.
+    const bandAlpha = s.valid ? 0.85 : 0.35;
+    ctx.strokeStyle = `rgba(43, 29, 22, ${bandAlpha})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(px, py);
+    ctx.stroke();
+    // The grip knob under the cursor.
+    ctx.fillStyle = '#f8f2e2';
+    ctx.beginPath();
+    ctx.arc(px, py, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    if (!s.valid) return;
+
+    // Aim guide: dashed line opposite the pull (screen space), arrowhead tip.
+    const gx = x0 - px;
+    const gy = y0 - py;
+    const gl = Math.hypot(gx, gy);
+    if (gl > 1) {
+      const ux = gx / gl;
+      const uy = gy / gl;
+      const powerFrac = Math.min(1.4, s.len / ss.referenceDragFrac);
+      const guideLen = canvas.height * ss.guideLenFrac * (0.5 + 0.5 * powerFrac);
+      const tx = x0 + ux * guideLen;
+      const ty = y0 + uy * guideLen;
+      ctx.strokeStyle = 'rgba(201, 86, 60, 0.95)';
+      ctx.lineWidth = 4;
+      ctx.setLineDash([10, 9]);
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Arrowhead.
+      const ah = 14;
+      ctx.fillStyle = 'rgba(201, 86, 60, 0.95)';
+      ctx.beginPath();
+      ctx.moveTo(tx + ux * ah, ty + uy * ah);
+      ctx.lineTo(tx - uy * ah * 0.55, ty + ux * ah * 0.55);
+      ctx.lineTo(tx + uy * ah * 0.55, ty - ux * ah * 0.55);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Power meter beside the ball: fill vs max pull, notch at perfect power.
+    const mh = canvas.height * 0.15;
+    const mw = 10;
+    const mx = x0 + 46;
+    const my = y0 - mh / 2;
+    const fill = Math.min(1, s.len / ss.maxDragFrac);
+    const notch = ss.referenceDragFrac / ss.maxDragFrac;
+    ctx.fillStyle = 'rgba(43, 29, 22, 0.3)';
+    ctx.fillRect(mx, my, mw, mh);
+    ctx.fillStyle = 'rgba(247, 201, 72, 0.95)';
+    ctx.fillRect(mx, my + mh * (1 - fill), mw, mh * fill);
+    ctx.strokeStyle = 'rgba(43, 29, 22, 0.85)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(mx, my, mw, mh);
+    // Perfect-power notch.
+    const ny = my + mh * (1 - notch);
+    ctx.beginPath();
+    ctx.moveTo(mx - 4, ny);
+    ctx.lineTo(mx + mw + 4, ny);
+    ctx.stroke();
   }
 
   private renderSteer(): void {

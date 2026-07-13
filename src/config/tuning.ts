@@ -120,6 +120,27 @@ export const tuning = {
     lateralMax: 0.12,
   },
 
+  /** Mouse slingshot aim (press the ball, pull back, release to fire). */
+  slingshot: {
+    /**
+     * Press must land within this distance of the ball's screen position
+     * (viewport-height units, aspect-corrected) — the slingshot grab.
+     */
+    grabRadius: 0.3,
+    /** Min net-downward pull (viewport-height fraction) for a valid shot. */
+    minDragFrac: 0.03,
+    /**
+     * Pull length mapping to solved-perfect power (viewport-height fraction).
+     * The held ball sits at ~0.9 of screen height, so perfect power must be
+     * reachable inside the remaining margin.
+     */
+    referenceDragFrac: 0.08,
+    /** Pull length where the power meter tops out. */
+    maxDragFrac: 0.15,
+    /** Aim guide line length at reference power (viewport-height fraction). */
+    guideLenFrac: 0.22,
+  },
+
   curve: {
     /** Master switch for mid-flight steering (body English). */
     enabled: true,
@@ -146,6 +167,11 @@ export const tuning = {
     fadeBelowFrac: 0.35,
     /** A steer move sample steers for at most this long without a newer one (ms). */
     commandHoldMs: 90,
+    /**
+     * WASD air-steer strength: the drag velocity a held key emulates
+     * (viewport fractions/s, same units as the touch steer drag).
+     */
+    keySpeed: 1.1,
     /** Visual sidespin: extra mesh spin (rad/s) per m/s² of lateral steer accel. */
     visualSpinGain: 0.9,
   },

@@ -1,4 +1,5 @@
 import type { Heat } from '../core/state';
+import type { ControlMode } from '../input/controlMode';
 import type { LeaderboardEntry, CareerStats } from './persist';
 
 const STAR_COUNT = 5;
@@ -18,9 +19,10 @@ export class Hud {
   private readonly bestLine = document.getElementById('best-line')!;
   private readonly leaderboardEl = document.getElementById('leaderboard')!;
   private readonly careerEl = document.getElementById('career-stats')!;
+  private readonly controlsBtn = document.getElementById('controls-btn')!;
   private readonly stars: HTMLSpanElement[] = [];
 
-  constructor(onToggleStats: () => void) {
+  constructor(onToggleStats: () => void, onToggleControls: () => void) {
     for (let i = 0; i < STAR_COUNT; i++) {
       const s = document.createElement('span');
       s.textContent = '★';
@@ -29,6 +31,11 @@ export class Hud {
     }
     document.getElementById('stats-btn')!.addEventListener('click', onToggleStats);
     document.getElementById('retry-btn')!.addEventListener('click', onToggleStats);
+    this.controlsBtn.addEventListener('click', onToggleControls);
+  }
+
+  setControlMode(mode: ControlMode): void {
+    this.controlsBtn.textContent = mode === 'slingshot' ? 'input: drag' : 'input: swipe';
   }
 
   setRun(runScore: number, streak: number, stars: number, punch = false): void {

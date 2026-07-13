@@ -27,6 +27,9 @@ import { ShotReplay } from './systems/shotReplay';
 import { runShotBattery } from './systems/shotBattery';
 import { pickNextPosition } from './systems/scheduler';
 import { SwipeInput, type Gesture } from './input/swipe';
+import { SlingshotInput } from './input/slingshot';
+import { KeySteer } from './input/keySteer';
+import { loadControlMode, saveControlMode, type ControlMode } from './input/controlMode';
 import { Hud } from './ui/hud';
 import { loadBestRun, loadLeaderboard, loadStats, saveStats, pushRun } from './ui/persist';
 import { AudioBank } from './systems/audio';
@@ -94,7 +97,17 @@ async function boot(): Promise<void> {
   const stats = loadStats();
   stats.sessions++;
   saveStats(stats);
-  const hud = new Hud(() => toggleStats());
+  let controlMode: ControlMode = loadControlMode();
+  const hud = new Hud(
+    () => toggleStats(),
+    () => {
+      controlMode = controlMode === 'swipe' ? 'slingshot' : 'swipe';
+      saveControlMode(controlMode);
+      hud.setControlMode(controlMode);
+      overlay.clearSlingshot();
+    },
+  );
+  hud.setControlMode(controlMode);
   const audio = new AudioBank();
   const net = new VerletNet(scene, hoop.rimCenter);
   const trail = new BallTrail(scene);
@@ -108,6 +121,7 @@ async function boot(): Promise<void> {
   boiler.outline(court.backboardMesh, artTheme.outline.board);
   boiler.outline(court.poleMesh, artTheme.outline.pole);
   boiler.outline(court.armMesh, artTheme.outline.pole);
+  for (const mesh of court.propMeshes) boiler.outline(mesh, artTheme.outline.prop);
   const blobShadow = new BlobShadow(scene);
   boiler.onCycle((f) => {
     court.applyBoilFrame(f);
@@ -218,12 +232,14 @@ async function boot(): Promise<void> {
     overlay.clearSteerState();
   }
 
+  // Touch scheme: flick swipe to shoot. Aim path gated by control mode; the
+  // mid-flight steer drag stays live in both modes.
   new SwipeInput(canvas, {
     onMove: (samples) => {
-      if (run.phase === 'aiming') overlay.showLive(samples);
+      if (controlMode === 'swipe' && run.phase === 'aiming') overlay.showLive(samples);
     },
     onGesture: (g) => {
-      if (run.phase === 'aiming') fireShot(g);
+      if (controlMode === 'swipe' && run.phase === 'aiming') fireShot(g);
     },
     steerActive: () => tuning.curve.enabled && run.phase === 'flight',
     steerGrabCheck: (x, y) => {
@@ -239,6 +255,26 @@ async function boot(): Promise<void> {
     },
     onSteerEnd: () => endSteerDrag(),
   });
+
+  // Mouse scheme: slingshot pull-back on the ball; WASD steers the air.
+  new SlingshotInput(canvas, {
+    active: () => controlMode === 'slingshot' && run.phase === 'aiming',
+    grabCheck: (x, y) => {
+      const b = ballScreenPos();
+      const aspect = window.innerWidth / window.innerHeight;
+      const d = Math.hypot((x - b.x) * aspect, y - b.y);
+      return d <= tuning.slingshot.grabRadius;
+    },
+    onDrag: (d) => overlay.showSlingshot(ballScreenPos(), d),
+    onRelease: (g) => {
+      overlay.clearSlingshot();
+      fireShot(g);
+    },
+    onCancel: () => overlay.clearSlingshot(),
+  });
+
+  const keySteer = new KeySteer();
+  let keySteerHeld = false;
 
   /** The annotated score receipt: base, each bonus, then the multiplied total. */
   function showScoreMath(bd: ScoreBreakdown): void {
@@ -412,6 +448,20 @@ async function boot(): Promise<void> {
       }
       physics.world.gravity = { x: 0, y: -tuning.world.gravity, z: 0 };
       if (run.phase === 'flight') {
+        // WASD air steer: a held key is a synthetic steer drag, refreshed
+        // every step so the commandHoldMs expiry never drops it.
+        const keys = keySteer.poll();
+        if (keys) {
+          keySteerHeld = true;
+          steerVx = keys.vx;
+          steerVy = keys.vy;
+          steer.setCommand(keys.vx, keys.vy);
+        } else if (keySteerHeld) {
+          keySteerHeld = false;
+          steer.clearCommand();
+          steerVx = 0;
+          steerVy = 0;
+        }
         // Camera basis for steering: screen-x → lateral, screen-y → depth.
         camera.getWorldDirection(camFwd);
         camFwd.y = 0;
