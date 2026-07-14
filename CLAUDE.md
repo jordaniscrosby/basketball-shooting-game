@@ -42,7 +42,7 @@ Each directory has its own CLAUDE.md with per-file detail. Read the one for the 
 
 ## Architecture
 
-**`src/main.ts` is the orchestrator.** Everything is wired inside one big `boot()` closure (`main.ts:45`): init Rapier → scene → physics world → hoop → ball → systems → inputs → debug panel → `FixedLoop`. The systems modules are pure and composable; main.ts owns the game-flow glue (shot lifecycle closures `holdBallAt`, `flyToNext`, `fireShot`, `resolveShot`).
+**`src/main.ts` is the orchestrator.** Everything is wired inside one big `boot()` closure (`main.ts:51`): init Rapier → scene → physics world → hoop → ball → systems → inputs → debug panel → `FixedLoop`. The systems modules are pure and composable; main.ts owns the game-flow glue (shot lifecycle closures `holdBallAt`, `flyToNext`, `fireShot`, `resolveShot`).
 
 **Fixed 60 Hz timestep with render interpolation** (`core/loop.ts`, gaffer-style accumulator). `update(dt)` runs zero-or-more times per frame at exactly `1/stepHz` and owns all physics, state mutation, and scoring; `render(alpha, frameDt)` runs once per frame and owns all interpolation, camera, and drawing. This split is load-bearing: it makes shots deterministic, which is what makes the shot-replay debug tool and the shot battery possible. Tick-accurate quantities use `dt` in update; purely visual springs/decays use `frameDt` in render.
 

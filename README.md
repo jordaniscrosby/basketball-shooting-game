@@ -10,8 +10,14 @@ npm install
 npm run dev       # http://localhost:5173
 ```
 
-- **Swipe up** (mouse-drag or touch) to shoot. Swipe angle = aim, flick speed = power.
-- Make +1, swish +2. Positions escalate in tiers at 3 / 7 / 10 consecutive makes.
+- **Swipe up** (touch) to shoot — swipe angle = aim, flick speed = power. On mouse
+  the default is the **slingshot**: press anywhere, pull down/back, release to fire.
+  The controls button (bottom right) toggles schemes.
+- **Curve the ball mid-flight** — drag on touch, WASD on keyboard — within a
+  per-flight Δv budget.
+- Scoring: points = (base + bonuses — SWISH/BANK/DEEP/CURVE…) × a star multiplier
+  earned at streak milestones (3/7/10/15/20). Shots get probabilistically farther
+  as the streak grows; one miss resets the run.
 - `npm run verify` — typecheck + unit tests (incl. the physics shot battery) + build.
 - `node scripts/genAudio.mjs` — regenerate the placeholder SFX WAVs.
 
@@ -43,7 +49,8 @@ Gotchas:
 
 - **Fixed 60 Hz timestep** (`core/loop.ts`) with render interpolation; deterministic,
   so the debug panel's shot replay re-fires trajectories exactly.
-- **All constants live in `config/tuning.ts`** — bound to the lil-gui panel (top right),
+- **All constants live in `config/tuning.ts`** (physics/gameplay) **and
+  `config/artTheme.ts`** (visual style) — bound to the lil-gui panel (top right),
   including a Rapier debug-wireframe toggle.
 - **Assisted aiming** (`systems/aim.ts`): each shot solves the perfect 45°-entry arc
   (`systems/shotSolver.ts`); the gesture perturbs it — azimuth → lateral error,
@@ -52,10 +59,17 @@ Gotchas:
 - **Swipe velocity** uses the Android-style Lsq2 estimator (`input/velocityTracker.ts`).
 - **Rim** is a ring of capsule colliders; **scoring** is two stacked crossing-plane
   sensors with an anti-cheese possession latch (`systems/scoring.ts`).
-- **Shot battery** (`systems/shotBattery.ts`): fires solved shots from all 15 curated
+- **Shot battery** (`systems/shotBattery.ts`): fires solved shots from all 18 curated
   positions headlessly and asserts they score — the regression harness for any
   physics tuning change. Runs in vitest and from the debug panel.
 - **Net** is a visual-only Verlet lattice (`net/verletNet.ts`); audio is howler with
   synthesized WAVs (swap files in `public/audio/` to upgrade).
+- **Score theater**: every make prints an itemized comic receipt (`fx/comicFx.ts`)
+  while the Balatro-style split scoreboard (points × streak) catches fire as the
+  heat tier rises (`ui/hud.ts`).
+- **Art workflow**: hand-authored PNGs in `public/art/` override the procedural
+  textures (slot spec in `public/art/README.md`); `?art=ball|hoop|wide|court|backdrop`
+  gives fixed-camera review screenshots; the debug panel's art folder live-tunes
+  `config/artTheme.ts`.
 
 Design docs live in the Obsidian vault under "Basketball Shooting Game".
