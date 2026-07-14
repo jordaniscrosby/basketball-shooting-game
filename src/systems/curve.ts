@@ -34,6 +34,10 @@ export interface CurveTelemetry {
    * 1 = one clean arc, → 0 = frantic zigzag. The steez signal.
    */
   smoothness: number;
+  /** Δv spent along +lateralAxis (m/s) — one half of the SNAKE!! signal. */
+  dvLatPos: number;
+  /** Δv spent along −lateralAxis (m/s) — the other half. */
+  dvLatNeg: number;
   /** True once any meaningful Δv was applied. */
   steered: boolean;
 }
@@ -67,6 +71,8 @@ export class FlightSteer {
   private dvNet = new THREE.Vector3();
   private maxLateralDev = 0;
   private maxDev = 0;
+  private dvLatPos = 0;
+  private dvLatNeg = 0;
 
   private readonly accel = new THREE.Vector3();
   private readonly ghostPos = new THREE.Vector3();
@@ -95,6 +101,8 @@ export class FlightSteer {
     this.dvNet.set(0, 0, 0);
     this.maxLateralDev = 0;
     this.maxDev = 0;
+    this.dvLatPos = 0;
+    this.dvLatNeg = 0;
   }
 
   /** Live input: the latest drag-velocity sample (ignored during replay). */
@@ -207,6 +215,9 @@ export class FlightSteer {
     const dvStep = (force.length() / tuning.ball.mass) * h;
     this.dvSpent += dvStep;
     this.dvNet.addScaledVector(force, h / tuning.ball.mass);
+    const latDv = (force.dot(this.lateralAxis) / tuning.ball.mass) * h;
+    if (latDv >= 0) this.dvLatPos += latDv;
+    else this.dvLatNeg -= latDv;
   }
 
   /** The applied-force timeline for deterministic replay of this flight. */
@@ -221,6 +232,8 @@ export class FlightSteer {
       maxLateralDev: steered ? this.maxLateralDev : 0,
       maxDev: steered ? this.maxDev : 0,
       smoothness: steered ? this.dvNet.length() / this.dvSpent : 1,
+      dvLatPos: steered ? this.dvLatPos : 0,
+      dvLatNeg: steered ? this.dvLatNeg : 0,
       steered,
     };
   }

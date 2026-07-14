@@ -41,16 +41,40 @@ export function multiplierForStars(stars: number): number {
   return table[Math.min(stars, table.length - 1)] ?? 1;
 }
 
+/** Big-arc curve: enough lateral deviation from the unsteered ghost. */
+function isCurved(curve: CurveTelemetry | null): boolean {
+  return !!curve?.steered && curve.maxLateralDev >= tuning.score.curveDevThreshold;
+}
+
+/** Mid-air direction switch: meaningful lateral Δv spent BOTH ways. */
+function isSnaked(curve: CurveTelemetry | null): boolean {
+  return (
+    !!curve?.steered &&
+    Math.min(curve.dvLatPos, curve.dvLatNeg) >= tuning.score.snakeMinDvEach
+  );
+}
+
+/**
+ * Did this flight earn any curve-family trick (CURVE!/FULL BENDER!!/SNAKE!!)?
+ * This is the signal GameRun feeds its curve-combo counter with.
+ */
+export function isCurveTrick(curve: CurveTelemetry | null): boolean {
+  return isCurved(curve) || isSnaked(curve);
+}
+
 /**
  * Scoring v2: (base + Σ bonuses) × star multiplier. Every bonus traces to an
  * observable event — no hidden score RNG. Distance bonuses are mutually
  * exclusive by construction (one band per position); the curve tiers are
- * mutually exclusive with each other; STEEZ stacks on top of curve + swish.
+ * mutually exclusive with each other; SNAKE!! (mid-air direction switch)
+ * stacks on the tier; STEEZ stacks on top of any curve trick + swish.
  *
  * `streak` is the streak count INCLUDING this make — the milestone shot earns
- * its new multiplier (pairs with the star celebration).
+ * its new multiplier (pairs with the star celebration). `curveCombo` is the
+ * consecutive-curved-makes count INCLUDING this make (GameRun tracks it);
+ * from 2 up it pays a CURVE COMBO line that grows per level until the cap.
  */
-export function scoreShot(facts: ShotFacts, streak: number): ScoreBreakdown {
+export function scoreShot(facts: ShotFacts, streak: number, curveCombo = 0): ScoreBreakdown {
   const s = tuning.score;
   const bonuses: BonusLine[] = [];
 
@@ -69,15 +93,21 @@ export function scoreShot(facts: ShotFacts, streak: number): ScoreBreakdown {
   // Curve tiers: player input only — deviation is measured against the
   // deterministic unsteered ghost, so every card traces to a swipe.
   const curve = facts.curve;
-  let curved = false;
-  if (curve?.steered && curve.maxLateralDev >= s.curveDevThreshold) {
-    curved = true;
-    const nearMax = tuning.curve.budget > 0 && curve.dvSpent / tuning.curve.budget >= s.benderBudgetFrac;
+  if (isCurved(curve)) {
+    const nearMax =
+      tuning.curve.budget > 0 && curve!.dvSpent / tuning.curve.budget >= s.benderBudgetFrac;
     if (nearMax) bonuses.push({ label: 'FULL BENDER!!', points: s.bonus.fullBender });
     else bonuses.push({ label: 'CURVE!', points: s.bonus.curve });
   }
-  if (curved && facts.result === 'swish') {
+  if (isSnaked(curve)) {
+    bonuses.push({ label: 'SNAKE!!', points: s.bonus.snake });
+  }
+  if (isCurveTrick(curve) && facts.result === 'swish') {
     bonuses.push({ label: 'STEEZ!!', points: s.bonus.steez });
+  }
+  if (curveCombo >= 2) {
+    const level = Math.min(curveCombo, s.curveComboCap);
+    bonuses.push({ label: `CURVE COMBO ×${curveCombo}`, points: s.bonus.curveCombo * (level - 1) });
   }
 
   const stars = starsForStreak(streak);

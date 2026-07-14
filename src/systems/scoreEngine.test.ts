@@ -15,9 +15,22 @@ function curved(over: Partial<CurveTelemetry> = {}): CurveTelemetry {
     maxLateralDev: s.curveDevThreshold + 0.1,
     maxDev: 0.5,
     smoothness: 0.9,
+    dvLatPos: 0.4,
+    dvLatNeg: 0,
     steered: true,
     ...over,
   };
+}
+
+/** An S-curve: meaningful lateral Δv both ways (the SNAKE!! signal). */
+function snaked(over: Partial<CurveTelemetry> = {}): CurveTelemetry {
+  return curved({
+    dvSpent: s.snakeMinDvEach * 2 + 0.1,
+    dvLatPos: s.snakeMinDvEach + 0.05,
+    dvLatNeg: s.snakeMinDvEach + 0.05,
+    smoothness: 0.1,
+    ...over,
+  });
 }
 
 describe('star track', () => {
@@ -116,6 +129,45 @@ describe('scoreShot', () => {
     const labels = bd.bonuses.map((b) => b.label);
     expect(labels).toEqual(['SWISH!', 'CURVE!', 'STEEZ!!']);
     expect(bd.total).toBe(s.base + s.bonus.swish + s.bonus.curve + s.bonus.steez);
+  });
+
+  it('SNAKE!! requires meaningful lateral Δv in BOTH directions', () => {
+    const oneWay = scoreShot(facts({ curve: curved({ dvLatPos: 0.9, dvLatNeg: 0.05 }) }), 1);
+    expect(oneWay.bonuses.map((b) => b.label)).not.toContain('SNAKE!!');
+
+    const bd = scoreShot(facts({ curve: snaked() }), 1);
+    expect(bd.bonuses.map((b) => b.label)).toContain('SNAKE!!');
+  });
+
+  it('SNAKE!! stacks on the curve tier and counts as a curve trick for STEEZ', () => {
+    // Big deviation AND a direction switch: tier + snake together.
+    const both = scoreShot(facts({ curve: snaked() }), 1);
+    expect(both.bonuses.map((b) => b.label)).toEqual(['CURVE!', 'SNAKE!!']);
+
+    // A tight S below the deviation threshold still earns SNAKE!! alone,
+    // and a snaked swish earns STEEZ even without the CURVE! tier.
+    const tightS = snaked({ maxLateralDev: s.curveDevThreshold - 0.1 });
+    const bd = scoreShot(facts({ result: 'swish', rimContacts: 0, curve: tightS }), 1);
+    expect(bd.bonuses.map((b) => b.label)).toEqual(['SWISH!', 'SNAKE!!', 'STEEZ!!']);
+  });
+
+  it('CURVE COMBO pays from level 2 and grows per level until the cap', () => {
+    const one = scoreShot(facts({ curve: curved() }), 1, 1);
+    expect(one.bonuses.some((b) => b.label.startsWith('CURVE COMBO'))).toBe(false);
+
+    const two = scoreShot(facts({ curve: curved() }), 1, 2);
+    const comboLine = two.bonuses.find((b) => b.label.startsWith('CURVE COMBO'))!;
+    expect(comboLine.label).toBe('CURVE COMBO ×2');
+    expect(comboLine.points).toBe(s.bonus.curveCombo);
+
+    const atCap = scoreShot(facts({ curve: curved() }), 1, s.curveComboCap);
+    const beyondCap = scoreShot(facts({ curve: curved() }), 1, s.curveComboCap + 3);
+    const capPts = s.bonus.curveCombo * (s.curveComboCap - 1);
+    expect(atCap.bonuses.find((b) => b.label.startsWith('CURVE COMBO'))!.points).toBe(capPts);
+    expect(beyondCap.bonuses.find((b) => b.label.startsWith('CURVE COMBO'))!.points).toBe(capPts);
+    // The label keeps counting past the cap — the points stop growing.
+    expect(beyondCap.bonuses.find((b) => b.label.startsWith('CURVE COMBO'))!.label)
+      .toBe(`CURVE COMBO ×${s.curveComboCap + 3}`);
   });
 
   it('applies the multiplier to the full bonus sum', () => {

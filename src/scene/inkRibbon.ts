@@ -46,6 +46,11 @@ export class RibbonBatch {
     this.mesh.visible = v;
   }
 
+  /** Live opacity (only meaningful when constructed with opts.opacity). */
+  set opacity(o: number) {
+    (this.mesh.material as THREE.MeshBasicMaterial).opacity = o;
+  }
+
   begin(camera: THREE.Camera): void {
     this.quadCount = 0;
     camera.getWorldPosition(this.camPos);

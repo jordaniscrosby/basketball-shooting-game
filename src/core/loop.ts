@@ -20,6 +20,15 @@ export class FixedLoop {
   private rafId = 0;
   private running = false;
 
+  /**
+   * World time scale (bullet time): scales the wall-clock time fed to the
+   * accumulator, so physics still steps at exactly 1/stepHz — steps just
+   * arrive less often. render() keeps receiving the REAL frameDt (HUD/FX
+   * springs run at full speed over the slowed world). Determinism holds:
+   * the step sequence is identical, only its wall-clock spacing changes.
+   */
+  timeScale = 1;
+
   /** Exponential moving average of raw frame dt, for the fps readout. */
   smoothedFps = 60;
 
@@ -39,7 +48,7 @@ export class FixedLoop {
         this.smoothedFps += (1 / frameDt - this.smoothedFps) * 0.05;
       }
       frameDt = Math.min(frameDt, tuning.world.maxFrameDt);
-      this.accumulator += frameDt;
+      this.accumulator += frameDt * Math.max(0, this.timeScale);
       while (this.accumulator >= h) {
         this.cb.update(h);
         this.accumulator -= h;

@@ -49,6 +49,7 @@ export class ComicFx {
   private items: FxItem[] = [];
   private time = 0;
   private focus = false;
+  private warp = 0;
   private swirl: SwirlCanvas | null = null;
   private panelSwirlOn = false;
   private readonly v = new THREE.Vector3();
@@ -70,7 +71,13 @@ export class ComicFx {
   card(
     text: string,
     world: THREE.Vector3,
-    opts: { sub?: string; style?: CardStyle; burst?: boolean; stack?: number; scale?: number } = {},
+    opts: {
+      sub?: string | undefined;
+      style?: CardStyle;
+      burst?: boolean;
+      stack?: number;
+      scale?: number;
+    } = {},
   ): void {
     this.items.push({
       kind: 'card',
@@ -125,6 +132,11 @@ export class ComicFx {
     this.focus = on;
   }
 
+  /** Bullet-time warp tunnel, strength ∈ [0,1] (0 = off). */
+  setWarp(strength: number): void {
+    this.warp = Math.max(0, Math.min(1, strength));
+  }
+
   /** Optional swirl cameo: big panels fill their interiors with it. */
   attachSwirl(swirl: SwirlCanvas): void {
     this.swirl = swirl;
@@ -135,6 +147,7 @@ export class ComicFx {
     const { ctx, canvas } = this;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    if (this.warp > 0.01) this.drawWarp();
     if (this.focus) this.drawFocusLines();
 
     this.items = this.items.filter((it) => this.time - it.born < it.lifeMs);
@@ -404,6 +417,52 @@ export class ComicFx {
     ctx.strokeStyle = artTheme.palette.ink;
     ctx.lineWidth = 1.6;
     ctx.stroke();
+  }
+
+  /**
+   * Bullet-time warp: long ink streaks rushing from the screen edges toward
+   * center (the tunnel) under a soft ink vignette. Both scale with strength,
+   * and the streaks boil on the step grid like everything else here.
+   */
+  private drawWarp(): void {
+    const { ctx, canvas } = this;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const maxR = Math.hypot(cx, cy);
+    const k = this.warp;
+    const stepIndex = Math.floor(this.time / (1000 / artTheme.fx.stepHz));
+    const rng = seededRng(0x5107 + stepIndex * 613);
+
+    // Vignette first — the world darkens toward the edges while time dips.
+    const vAlpha = artTheme.slowmoFx.vignetteAlpha * k;
+    if (vAlpha > 0.01) {
+      const g = ctx.createRadialGradient(cx, cy, maxR * 0.45, cx, cy, maxR);
+      g.addColorStop(0, 'transparent');
+      g.addColorStop(1, artTheme.palette.ink);
+      ctx.save();
+      ctx.globalAlpha = vAlpha;
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.strokeStyle = artTheme.palette.ink;
+    ctx.globalAlpha = artTheme.slowmoFx.warpAlpha * k;
+    ctx.lineCap = 'round';
+    const n = artTheme.slowmoFx.warpLineCount;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rng() * 0.09;
+      // Streaks grow inward with strength — the tunnel closes in.
+      const len = maxR * (0.18 + (0.2 + rng() * 0.22) * k);
+      const r1 = maxR * (1.02 - rng() * 0.06);
+      ctx.lineWidth = 1.5 + rng() * 3.5;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * (r1 - len), cy + Math.sin(a) * (r1 - len));
+      ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   private drawFocusLines(): void {

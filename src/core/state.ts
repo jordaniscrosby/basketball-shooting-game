@@ -1,4 +1,11 @@
-import { scoreShot, starsForStreak, multiplierForStars, type ShotFacts, type ScoreBreakdown } from '../systems/scoreEngine';
+import {
+  scoreShot,
+  starsForStreak,
+  multiplierForStars,
+  isCurveTrick,
+  type ShotFacts,
+  type ScoreBreakdown,
+} from '../systems/scoreEngine';
 
 export type Phase = 'positioning' | 'aiming' | 'flight' | 'resolved' | 'gameover';
 
@@ -34,6 +41,18 @@ export class GameRun {
   phase: Phase = 'positioning';
   /** Consecutive makes this run — drives stars and the difficulty ramp. */
   streak = 0;
+  /**
+   * Consecutive curve-trick makes — the CURVE COMBO counter. A curved make
+   * extends it (+1, or +2 when it's also a swish — the steez double-step);
+   * a straight make or a miss breaks it.
+   */
+  curveCombo = 0;
+  /**
+   * Consecutive misses INCLUDING across run resets (a miss ends the run, so
+   * this can only grow between makes). Feeds the miss-streak comedy ladder
+   * in fx/annotations — any make clears it.
+   */
+  missStreak = 0;
   /** Cumulative arcade score this run — the leaderboard number. */
   runScore = 0;
   shotIndex = 0;
@@ -69,14 +88,22 @@ export class GameRun {
       const ended: EndedRun = { runScore: this.runScore, streak: this.streak, isNewBest };
       this.bestRun = Math.max(this.bestRun, this.runScore);
       this.streak = 0;
+      this.curveCombo = 0;
       this.runScore = 0;
+      this.missStreak++;
       return { result, breakdown: null, points: 0, starMilestone: null, endedRun: ended };
     }
 
     const starsBefore = starsForStreak(this.streak);
     this.streak++;
+    this.missStreak = 0;
+    if (facts && isCurveTrick(facts.curve)) {
+      this.curveCombo += result === 'swish' ? 2 : 1;
+    } else {
+      this.curveCombo = 0;
+    }
     const breakdown = facts
-      ? scoreShot(facts, this.streak)
+      ? scoreShot(facts, this.streak, this.curveCombo)
       : scoreShot(
           { result, band: 'close', bankUsed: false, rimContacts: 0, curve: null },
           this.streak,

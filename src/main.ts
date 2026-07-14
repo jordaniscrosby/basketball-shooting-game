@@ -22,17 +22,34 @@ import { ScoringTracker } from './systems/scoring';
 import { aimShot, classifyShot } from './systems/aim';
 import { applyFlightForces } from './systems/spin';
 import { FlightSteer, type CurveTelemetry } from './systems/curve';
-import type { ScoreBreakdown } from './systems/scoreEngine';
+import { isCurveTrick, type ScoreBreakdown } from './systems/scoreEngine';
+import { annotateShot } from './fx/annotations';
 import { ShotReplay } from './systems/shotReplay';
 import { runShotBattery } from './systems/shotBattery';
 import { pickNextPosition } from './systems/scheduler';
+import { TrajectoryPredictor } from './systems/trajectory';
+import { TrajectoryLine } from './scene/trajectoryLine';
 import { SwipeInput, type Gesture } from './input/swipe';
-import { SlingshotInput } from './input/slingshot';
+import { SlingshotInput, pullAim, type SlingshotDrag } from './input/slingshot';
+import { ClickClickInput, meterUpSpeed, type ClickClickState } from './input/clickclick';
 import { KeySteer } from './input/keySteer';
-import { loadControlMode, saveControlMode, type ControlMode } from './input/controlMode';
+import {
+  loadControlMode,
+  saveControlMode,
+  nextControlMode,
+  type ControlMode,
+} from './input/controlMode';
 import { Hud } from './ui/hud';
 import { applyThemeToCss } from './ui/themeBridge';
-import { loadBestRun, loadLeaderboard, loadStats, saveStats, pushRun } from './ui/persist';
+import {
+  loadBestRun,
+  loadLeaderboard,
+  loadStats,
+  saveStats,
+  pushRun,
+  loadMuted,
+  saveMuted,
+} from './ui/persist';
 import { AudioBank } from './systems/audio';
 import { VerletNet } from './net/verletNet';
 import { BallTrail } from './scene/trail';
@@ -63,6 +80,10 @@ async function boot(): Promise<void> {
   const court = createCourt(scene, artOverrides);
   let hoop = createHoop(physics.world);
   let rimHandles = new Set(hoop.rimColliders.map((c) => c.handle));
+  // Ghost world + dotted ink arc: the aim-time preview simulates the real
+  // shot ahead of release (rim/board bounces included).
+  const predictor = new TrajectoryPredictor();
+  const trajLine = new TrajectoryLine(scene);
 
   const positions = getPositions();
   const ball = createBall(physics.world, launchPointFor(positions[0]!));
@@ -110,18 +131,28 @@ async function boot(): Promise<void> {
   stats.sessions++;
   saveStats(stats);
   let controlMode: ControlMode = loadControlMode();
+  let muted = loadMuted();
   const hud = new Hud(
     () => toggleStats(),
     () => {
-      controlMode = controlMode === 'swipe' ? 'slingshot' : 'swipe';
+      controlMode = nextControlMode(controlMode);
       saveControlMode(controlMode);
       hud.setControlMode(controlMode);
       overlay.clearSlingshot();
+      clickClick.cancel();
+    },
+    () => {
+      muted = !muted;
+      saveMuted(muted);
+      audio.setMuted(muted);
+      hud.setMuted(muted);
     },
   );
   hud.setControlMode(controlMode);
   hud.attachSwirl(swirl);
   const audio = new AudioBank();
+  audio.setMuted(muted);
+  hud.setMuted(muted);
   const net = new VerletNet(scene, hoop.rimCenter);
   const trail = new BallTrail(scene);
   const ballMat = ballMesh.material as THREE.MeshToonMaterial;
@@ -170,6 +201,19 @@ async function boot(): Promise<void> {
   let currentPos: ShotPosition = pickNextPosition(positions, 0, 0, null);
   let flightTimer = 0;
 
+  // Bullet time: engaged while a steer input is live mid-flight. Depth scales
+  // with the star multiplier — a hot run literally buys more wall-clock time
+  // to bend the shot into bonus territory.
+  let timeScale = 1;
+  let slowmoEngaged = false;
+  function slowmoTarget(): number {
+    if (!tuning.slowmo.enabled || run.phase !== 'flight' || !steer.steeringActive) return 1;
+    const table = tuning.score.starMultipliers;
+    const maxMult = table[table.length - 1] ?? 1;
+    const k = maxMult > 1 ? (run.multiplier - 1) / (maxMult - 1) : 0;
+    return tuning.slowmo.scaleAtX1 + (tuning.slowmo.scaleAtMax - tuning.slowmo.scaleAtX1) * k;
+  }
+
   function holdBallAt(pos: ShotPosition): void {
     const launch = launchPointFor(pos);
     const body = ball.tracked.body;
@@ -207,7 +251,9 @@ async function boot(): Promise<void> {
 
   function fireShot(g: Gesture): void {
     const launch = launchPointFor(currentPos);
-    const shot = aimShot(launch, hoop.rimCenter, g);
+    // Click-click aims 1:1 — the arrow IS the shot direction, no assist pull.
+    const lateral = controlMode === 'clickclick' ? tuning.clickclick : tuning.input;
+    const shot = aimShot(launch, hoop.rimCenter, g, lateral);
     const body = ball.tracked.body;
     body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
     body.setLinvel({ x: shot.velocity.x, y: shot.velocity.y, z: shot.velocity.z }, true);
@@ -217,7 +263,16 @@ async function boot(): Promise<void> {
     );
     replay.record(launch, shot.velocity, shot.angularVelocity);
     steer.beginFlight(launch, shot.velocity);
-    overlay.showRelease(shot, launch, g.samples);
+    // Release flash: the predicted path (same truncation the aim preview
+    // showed) relights solid gold and fades — works in swipe mode too, where
+    // there was no aim-time preview to ignite.
+    const wantDebugArc = tuning.debug.swipeOverlay && tuning.debug.predictedArc;
+    const predicted =
+      tuning.trajectory.enabled || wantDebugArc
+        ? predictor.predict(launch, shot.velocity, shot.angularVelocity)
+        : null;
+    if (predicted && tuning.trajectory.enabled) trajLine.ignite(predicted);
+    overlay.showRelease(shot, launch, g.samples, wantDebugArc && predicted ? predicted : undefined);
     run.release();
     stats.attempts++;
     flightTimer = 0;
@@ -250,6 +305,45 @@ async function boot(): Promise<void> {
     steerVy = 0;
     trail.setSteering(false);
     overlay.clearSteerState();
+  }
+
+  // Aim-time trajectory preview: once per render frame the live aim scheme
+  // synthesizes the gesture a release-right-now would fire (the SAME mapping
+  // the release path uses — pullAim / meterUpSpeed), and the ghost world
+  // simulates it. Keyed so a held-still aim doesn't re-simulate every frame.
+  let slingDrag: SlingshotDrag | null = null;
+  let previewKey = '';
+  function updateAimPreview(ccState: ClickClickState | null): void {
+    let azimuth: number | null = null;
+    let upSpeed = 0;
+    if (tuning.trajectory.enabled && run.phase === 'aiming') {
+      if (controlMode === 'slingshot' && slingDrag?.valid) {
+        ({ azimuth, upSpeed } = pullAim(slingDrag));
+      } else if (controlMode === 'clickclick' && ccState) {
+        azimuth = ccState.azimuth;
+        // Hover shows the solved-perfect-power path; charging tracks the meter.
+        upSpeed = ccState.charging
+          ? meterUpSpeed(ccState.meter)
+          : tuning.input.referenceFlickSpeed;
+      }
+    }
+    if (azimuth === null) {
+      trajLine.hide();
+      previewKey = '';
+      return;
+    }
+    const key = `${controlMode}|${azimuth.toFixed(5)}|${upSpeed.toFixed(5)}`;
+    if (key === previewKey) return;
+    previewKey = key;
+    const launch = launchPointFor(currentPos);
+    const lateral = controlMode === 'clickclick' ? tuning.clickclick : tuning.input;
+    const shot = aimShot(
+      launch,
+      hoop.rimCenter,
+      { azimuth, upSpeed, curvature: 0, samples: [] },
+      lateral,
+    );
+    trajLine.show(predictor.predict(launch, shot.velocity, shot.angularVelocity));
   }
 
   // Touch scheme: flick swipe to shoot. Aim path gated by control mode; the
@@ -285,12 +379,30 @@ async function boot(): Promise<void> {
       const d = Math.hypot((x - b.x) * aspect, y - b.y);
       return d <= tuning.slingshot.grabRadius;
     },
-    onDrag: (d) => overlay.showSlingshot(ballScreenPos(), d),
+    onDrag: (d) => {
+      slingDrag = d;
+      overlay.showSlingshot(ballScreenPos(), d);
+    },
     onRelease: (g) => {
+      slingDrag = null;
       overlay.clearSlingshot();
       fireShot(g);
     },
-    onCancel: () => overlay.clearSlingshot(),
+    onCancel: () => {
+      slingDrag = null;
+      overlay.clearSlingshot();
+    },
+  });
+
+  // Arcade scheme: click to aim, click again to stop the sweeping power meter.
+  const clickClick = new ClickClickInput(canvas, {
+    active: () => controlMode === 'clickclick' && run.phase === 'aiming',
+    ballScreen: () => ballScreenPos(),
+    onFire: (g) => {
+      overlay.clearClickMeter();
+      fireShot(g);
+    },
+    onCancel: () => overlay.clearClickMeter(),
   });
 
   const keySteer = new KeySteer();
@@ -366,7 +478,8 @@ async function boot(): Promise<void> {
       if (lastCurve.steered) {
         console.log(
           `[curve] dv=${lastCurve.dvSpent.toFixed(2)} latDev=${lastCurve.maxLateralDev.toFixed(2)} ` +
-            `smooth=${lastCurve.smoothness.toFixed(2)}`,
+            `smooth=${lastCurve.smoothness.toFixed(2)} ` +
+            `lat±=${lastCurve.dvLatPos.toFixed(2)}/${lastCurve.dvLatNeg.toFixed(2)} combo=${run.curveCombo}`,
         );
       }
     }
@@ -376,12 +489,19 @@ async function boot(): Promise<void> {
       // The miss moment: sound dies, run resets, play continues — no menu.
       audio.silenceCut();
       applyHeatVisuals();
-      if (boardTouched) {
-        fx.card('BRICK!', hoop.rimCenter, { style: 'fire', burst: true });
-        screenShake('small');
-      } else if (scoring.hasRimContact) {
-        fx.card('CLANK!', hoop.rimCenter, { style: 'fire' });
-      }
+      // The heckle card: air ball / brick / rim-out, with the miss-streak
+      // quip underneath once the bricks start stacking.
+      const ann = annotateShot({
+        result,
+        bankUsed: boardTouched,
+        rimContacts: scoring.rimContactCount,
+        anyContact: boardTouched || scoring.hasRimContact,
+        curved: isCurveTrick(lastCurve),
+        missStreak: run.missStreak,
+        seed: run.shotIndex,
+      });
+      fx.card(ann.text, hoop.rimCenter, { sub: ann.sub, style: ann.style, burst: ann.burst });
+      screenShake('small');
       const ended = out.endedRun!;
       if (ended.runScore > 0) {
         pushRun(ended.runScore, ended.streak);
@@ -414,10 +534,18 @@ async function boot(): Promise<void> {
     stats.bestRun = Math.max(stats.bestRun, run.runScore);
     saveStats(stats);
 
-    // Comic beat: onomatopoeia card + the stacking score-math receipt.
-    if (result === 'swish') fx.card('SWISH!!', hoop.rimCenter, { style: 'accent', burst: true });
-    else if (boardTouched) fx.card('BANK!', hoop.rimCenter, { style: 'paper' });
-    else fx.card('COUNT IT!', hoop.rimCenter, { style: 'paper' });
+    // Comic beat: the annotation card (swish / bank / ugly-roll comedy per
+    // observed facts) + the stacking score-math receipt.
+    const ann = annotateShot({
+      result,
+      bankUsed: boardTouched,
+      rimContacts: scoring.rimContactCount,
+      anyContact: true,
+      curved: isCurveTrick(lastCurve),
+      missStreak: 0,
+      seed: run.shotIndex,
+    });
+    fx.card(ann.text, hoop.rimCenter, { style: ann.style, burst: ann.burst });
     // Shake NOW, with the onomatopoeia — before the receipt finishes rolling,
     // so a big make is felt pre-cognitively. Tier scales with magnitude.
     screenShake(
@@ -465,6 +593,7 @@ async function boot(): Promise<void> {
       hoop.dispose();
       hoop = createHoop(physics.world);
       rimHandles = new Set(hoop.rimColliders.map((c) => c.handle));
+      predictor.rebuildHoop();
     },
     replayShot: () => {
       if (!replay.hasShot || run.phase !== 'aiming') return;
@@ -627,8 +756,39 @@ async function boot(): Promise<void> {
         ballMat.emissive.setHSL((performance.now() * 0.0004) % 1, 0.9, 0.5);
         rimMat.emissive.setHSL((performance.now() * 0.0004 + 0.35) % 1, 0.9, 0.5);
       }
+      // Click-click charge: the meter sweeps on wall time, so push the fresh
+      // value to the overlay every frame while charging.
+      const ccState = clickClick.state(performance.now());
+      if (ccState) overlay.showClickMeter(ballScreenPos(), ccState);
+      else overlay.clearClickMeter();
+      updateAimPreview(ccState);
+      // Bullet time: ease world time toward the slow-mo target. Warp lines,
+      // camera zoom and audio pitch all ride the same strength signal; this
+      // layer and the HUD keep running at real speed over the slowed world.
+      const slowTarget = slowmoTarget();
+      if (slowTarget < 1 && !slowmoEngaged) audio.play('slowmo', tuning.juice.slowmoVolume, 250);
+      slowmoEngaged = slowTarget < 1;
+      const slowRate = slowTarget < timeScale ? tuning.slowmo.easeIn : tuning.slowmo.easeOut;
+      timeScale += (slowTarget - timeScale) * Math.min(1, frameDt * slowRate);
+      if (slowTarget === 1 && Math.abs(1 - timeScale) < 0.005) timeScale = 1;
+      loop.timeScale = timeScale;
+      audio.setTimeScale(timeScale);
+      const slowStrength = Math.min(
+        1,
+        Math.max(0, (1 - timeScale) / Math.max(0.05, 1 - tuning.slowmo.scaleAtMax)),
+      );
+      fx.setWarp(slowStrength);
+      if (!artReview) {
+        // The zoom cue: FOV pinches toward the ball while time is slowed.
+        const fov = tuning.camera.fov * (1 - (1 - artTheme.slowmoFx.fovScale) * slowStrength);
+        if (camera.fov !== fov) {
+          camera.fov = fov;
+          camera.updateProjectionMatrix();
+        }
+      }
       boiler.update(frameDt);
       blobShadow.update(ballRoot.position);
+      trajLine.update(frameDt, camera);
       net.render(camera);
       trail.render(camera);
       if (!artReview) rig.update(frameDt);

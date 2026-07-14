@@ -88,6 +88,33 @@ describe('FlightSteer', () => {
     expect(f!.length() / tuning.ball.mass).toBeLessThanOrEqual(tuning.curve.maxAccel + 1e-9);
   });
 
+  it('splits lateral Δv by direction: one-way arcs load one side, an S-curve loads both', () => {
+    tuning.curve.budget = 4; // roomy budget so the switch-back half isn't starved
+    const oneWay = new FlightSteer();
+    const { launch, vel } = launchState();
+    oneWay.beginFlight(launch, vel);
+    for (let i = 0; i < 30; i++) {
+      oneWay.setCommand(1.5, 0); // steady rightward drag
+      oneWay.step(H, RIGHT, FWD, airborne, rising);
+    }
+    // Shot fired down -z: lateralAxis = (-vz, 0, vx)/|v| = +x, so a rightward
+    // (camRight = +x) drag accumulates on the positive side only.
+    const t1 = oneWay.telemetry();
+    expect(t1.dvLatPos).toBeGreaterThan(0.1);
+    expect(t1.dvLatNeg).toBe(0);
+
+    const sCurve = new FlightSteer();
+    sCurve.beginFlight(launch, vel);
+    for (let i = 0; i < 60; i++) {
+      sCurve.setCommand(i < 30 ? 1.5 : -1.5, 0); // right, then hard back left
+      sCurve.step(H, RIGHT, FWD, airborne, rising);
+    }
+    const t2 = sCurve.telemetry();
+    expect(t2.dvLatPos).toBeGreaterThan(0.1);
+    expect(t2.dvLatNeg).toBeGreaterThan(0.1);
+    expect(t2.dvLatPos + t2.dvLatNeg).toBeCloseTo(t2.dvSpent, 6);
+  });
+
   it('smoothness ≈ 1 for one clean arc, low for frantic zigzag', () => {
     const clean = new FlightSteer();
     const { launch, vel } = launchState();

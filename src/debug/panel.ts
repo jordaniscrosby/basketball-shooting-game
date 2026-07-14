@@ -133,6 +133,19 @@ export function createDebugPanel(hooks: PanelHooks): GUI {
     'Pull-back length where the power meter tops out.');
   sling.close();
 
+  const click = gui.addFolder('clickclick');
+  tip(click.add(tuning.clickclick, 'meterSpeed', 0.2, 3, 0.05),
+    'Power meter sweep speed (full bottom-to-top traversals per second).');
+  tip(click.add(tuning.clickclick, 'sweetFrac', 0.1, 0.9, 0.01),
+    'Meter fill that maps to solved-perfect power — the green center of the gradient.');
+  tip(click.add(tuning.clickclick, 'powerSpan', 0.2, 2, 0.05),
+    'Power swing across the whole meter; edges land this far (×sweet-spot distance) from perfect.');
+  tip(click.add(tuning.clickclick, 'lateralGain', 0, 2, 0.05),
+    'Clicked angle → shot angle gain. 1 = the aim arrow is the shot direction, exactly.');
+  tip(click.add(tuning.clickclick, 'lateralMax', 0, 1.2, 0.01),
+    'Cap on the click-click aim angle (rad).');
+  click.close();
+
   const curve = gui.addFolder('curve');
   tip(curve.add(tuning.curve, 'enabled'),
     'Master switch for mid-flight steering (body English).');
@@ -155,6 +168,36 @@ export function createDebugPanel(hooks: PanelHooks): GUI {
   tip(curve.add(tuning.curve, 'visualSpinGain', 0, 4, 0.05),
     'Extra visual mesh spin per m/s² of lateral steer — cosmetic only, never touches physics.');
   curve.close();
+
+  const slowmo = gui.addFolder('slowmo');
+  tip(slowmo.add(tuning.slowmo, 'enabled'),
+    'Bullet time while curve-steering mid-flight — deeper at higher star multipliers.');
+  tip(slowmo.add(tuning.slowmo, 'scaleAtX1', 0.2, 1, 0.01),
+    'World time scale while steering at ×1 multiplier (1 = no slowdown).');
+  tip(slowmo.add(tuning.slowmo, 'scaleAtMax', 0.1, 1, 0.01),
+    'World time scale while steering at the max star multiplier — the deepest dive.');
+  tip(slowmo.add(tuning.slowmo, 'easeIn', 1, 20, 0.5),
+    'How fast time dips into slow-mo when steering engages (per second).');
+  tip(slowmo.add(tuning.slowmo, 'easeOut', 1, 20, 0.5),
+    'How fast time snaps back to real speed when steering ends (per second).');
+  slowmo.close();
+
+  const traj = gui.addFolder('trajectory');
+  tip(traj.add(tuning.trajectory, 'enabled'),
+    'Aim-time flight preview: a ghost physics world simulates the real shot ahead of release — rim and backboard bounces included.');
+  tip(traj.add(tuning.trajectory, 'horizonSec', 0.3, 4, 0.1),
+    'How far into the future the preview shows (s) — kept short so the line guides without spoiling the verdict.');
+  tip(traj.add(tuning.trajectory, 'boardFollowSec', 0, 0.6, 0.02),
+    'After the predicted path touches the backboard, keep only this much more of it (s).');
+  tip(traj.add(artTheme.trajectory, 'releaseFadeSec', 0.1, 2, 0.05),
+    'Release flash: how long the solid-gold afterimage takes to fade (s).');
+  tip(traj.add(artTheme.trajectory, 'dotRadius', 0.01, 0.08, 0.002),
+    'Preview dot radius (m) at the release end of the arc.');
+  tip(traj.add(artTheme.trajectory, 'everyN', 1, 6, 1),
+    'Draw a dot every N predicted physics steps — the dotted-line spacing.');
+  tip(traj.add(artTheme.trajectory, 'opacity', 0, 1, 0.05),
+    'Preview dot opacity.');
+  traj.close();
 
   const spin = gui.addFolder('spin');
   tip(spin.add(tuning.spin, 'backspinHz', 0, 6, 0.1),
@@ -285,6 +328,12 @@ export function createDebugPanel(hooks: PanelHooks): GUI {
     'Swirl opacity inside freeze panels.');
   tip(fxDials.add(artTheme.swirl, 'screenAlpha', 0, 1, 0.05).onChange(applyThemeToCss),
     'Swirl backdrop opacity behind the stats/game-over card.');
+  tip(fxDials.add(artTheme.slowmoFx, 'fovScale', 0.6, 1, 0.01),
+    'Camera FOV multiplier at full slow-mo strength — lower = harder zoom onto the ball.');
+  tip(fxDials.add(artTheme.slowmoFx, 'warpAlpha', 0, 1, 0.05),
+    'Bullet-time warp streak-line opacity at full strength.');
+  tip(fxDials.add(artTheme.slowmoFx, 'vignetteAlpha', 0, 0.8, 0.01),
+    'Bullet-time ink vignette opacity at full strength.');
   tip(fxDials.add(artTheme.fx, 'freezeSec', 0, 1, 0.05),
     'Milestone freeze-frame duration (s).');
   tip(fxDials.add(artTheme.fx, 'stretchMax', 1, 1.5, 0.01),

@@ -12,6 +12,23 @@ export interface SlingshotDrag {
   valid: boolean;
 }
 
+/**
+ * Pull → aim mapping, shared by release and the live trajectory preview so
+ * the previewed shot IS the shot a release would fire: azimuth off
+ * straight-down mirrors swipe's off-vertical convention; pull length maps
+ * through the reference flick speed so aimShot's power clamp/easing applies
+ * identically.
+ */
+export function pullAim(d: { dx: number; dy: number; len: number }): {
+  azimuth: number;
+  upSpeed: number;
+} {
+  return {
+    azimuth: Math.atan2(-d.dx, d.dy),
+    upSpeed: tuning.input.referenceFlickSpeed * (d.len / tuning.slingshot.referenceDragFrac),
+  };
+}
+
 export interface SlingshotCallbacks {
   /** Gate at pointer-down: slingshot mode selected and the run is aiming. */
   active: () => boolean;
@@ -96,12 +113,7 @@ export class SlingshotInput {
       this.cb.onCancel();
       return;
     }
-    // Pull → Gesture: azimuth off straight-down mirrors swipe's off-vertical
-    // convention; pull length maps through the reference flick speed so
-    // aimShot's power clamp/easing applies identically.
-    const azimuth = Math.atan2(-d.dx, d.dy);
-    const upSpeed =
-      tuning.input.referenceFlickSpeed * (d.len / tuning.slingshot.referenceDragFrac);
+    const { azimuth, upSpeed } = pullAim(d);
     const samples: PointerSample[] = [
       { x: this.startX, y: this.startY, t: this.startT },
       { x: this.curX, y: this.curY, t: e.timeStamp },

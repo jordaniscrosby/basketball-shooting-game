@@ -6,10 +6,12 @@ Shared easing vocabulary for visual tweens: `clamp01`, `easeOutCubic`, `easeInOu
 ## loop.ts
 `class FixedLoop` — gaffer-style fixed-timestep accumulator. Calls `update(dt)` zero-or-more times per animation frame at exactly `h = 1/tuning.world.stepHz` (60 Hz), then `render(alpha, frameDt)` once, where `alpha` is the leftover accumulator fraction for interpolation. `frameDt` is clamped to `tuning.world.maxFrameDt` (spiral-of-death guard). Public `smoothedFps` EMA for the readout.
 
+Public `timeScale` (bullet time, driven by main.ts from `tuning.slowmo`): scales the wall-clock time fed to the accumulator, so slow-mo stretches the spacing between steps without changing the step sequence — determinism holds. `render` still receives the REAL `frameDt`, so HUD/FX springs run full-speed over the slowed world.
+
 The determinism contract lives here: identical inputs → identical trajectories. This is what makes the shot-replay tool and shot battery trustworthy. Never step physics outside `update`; never mutate game state in `render`.
 
 ## state.ts
-`class GameRun` — the pure game FSM. `Phase = 'positioning' | 'aiming' | 'flight' | 'resolved' | 'gameover'`; `Heat = 'cold' | 'warm' | 'fire' | 'superstar'`. Transitions: `beginAiming()` → `release()` → `resolve(result, facts)` → `nextShot()`; plus `endSession()` / `retry()`. Getters: `stars`, `multiplier`, `heat`, `isNewBest`.
+`class GameRun` — the pure game FSM. `Phase = 'positioning' | 'aiming' | 'flight' | 'resolved' | 'gameover'`; `Heat = 'cold' | 'warm' | 'fire' | 'superstar'`. Transitions: `beginAiming()` → `release()` → `resolve(result, facts)` → `nextShot()`; plus `endSession()` / `retry()`. Getters: `stars`, `multiplier`, `heat`, `isNewBest`. Also owns `curveCombo` — consecutive curve-trick makes (via `scoreEngine.isCurveTrick`): +1 per curved make, +2 when it's also a swish, reset by a straight make or a miss; passed into `scoreShot` for the CURVE COMBO bonus line. And `missStreak` — consecutive misses (spans run resets, cleared by any make); feeds the miss-streak quips in `fx/annotations.ts`.
 
 Invariants:
 - A miss ends the RUN (streak/stars/runScore → 0, prior run returned as `EndedRun`) but the phase stays `resolved` and play continues. `gameover` is reachable **only** via `endSession()` (wired to the HUD stats toggle in main.ts).

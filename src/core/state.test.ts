@@ -14,6 +14,24 @@ function plainMake(): ShotFacts {
   return { result: 'make', band: 'close', bankUsed: false, rimContacts: 1, curve: null };
 }
 
+/** A make that earned the CURVE! tier (steered past the deviation threshold). */
+function curvedMake(result: 'make' | 'swish' = 'make'): ShotFacts {
+  return {
+    ...plainMake(),
+    result,
+    rimContacts: result === 'swish' ? 0 : 1,
+    curve: {
+      dvSpent: 0.4,
+      maxLateralDev: s.curveDevThreshold + 0.1,
+      maxDev: 0.5,
+      smoothness: 0.9,
+      dvLatPos: 0.4,
+      dvLatNeg: 0,
+      steered: true,
+    },
+  };
+}
+
 describe('GameRun FSM (continuous session)', () => {
   it('scores makes through the engine and accumulates the run score', () => {
     const run = new GameRun();
@@ -117,6 +135,50 @@ describe('GameRun FSM (continuous session)', () => {
     const out = run.resolve('make', plainMake()); // streak → 3, ★1, ×2
     expect(out.breakdown!.multiplier).toBe(2);
     expect(out.points).toBe(s.base * 2);
+  });
+
+  it('curve combo: curved makes chain (+1, +2 on swish), straight make or miss breaks it', () => {
+    const run = new GameRun();
+    toFlight(run);
+    run.resolve('make', curvedMake());
+    expect(run.curveCombo).toBe(1);
+    run.nextShot();
+
+    toFlight(run);
+    const out = run.resolve('swish', curvedMake('swish')); // curve swish double-steps
+    expect(run.curveCombo).toBe(3);
+    const combo = out.breakdown!.bonuses.find((b) => b.label.startsWith('CURVE COMBO'))!;
+    expect(combo.label).toBe('CURVE COMBO ×3');
+    expect(combo.points).toBe(s.bonus.curveCombo * 2);
+    run.nextShot();
+
+    toFlight(run);
+    const straight = run.resolve('make', plainMake()); // no curve → combo breaks
+    expect(run.curveCombo).toBe(0);
+    expect(straight.breakdown!.bonuses.some((b) => b.label.startsWith('CURVE COMBO'))).toBe(false);
+    run.nextShot();
+
+    toFlight(run);
+    run.resolve('make', curvedMake());
+    expect(run.curveCombo).toBe(1);
+    run.nextShot();
+    toFlight(run);
+    run.resolve('miss'); // a miss resets the combo with the run
+    expect(run.curveCombo).toBe(0);
+  });
+
+  it('missStreak grows across run resets and any make clears it', () => {
+    const run = new GameRun();
+    toFlight(run);
+    run.resolve('miss');
+    run.nextShot();
+    toFlight(run);
+    run.resolve('miss'); // consecutive misses span run resets — that's the joke
+    expect(run.missStreak).toBe(2);
+    run.nextShot();
+    toFlight(run);
+    run.resolve('make', plainMake());
+    expect(run.missStreak).toBe(0);
   });
 
   it('rejects out-of-order transitions', () => {

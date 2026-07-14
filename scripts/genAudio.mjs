@@ -205,6 +205,26 @@ for (let variant = 0; variant < 3; variant++) {
   writeWav('basshit.wav', s);
 }
 
+// --- slow-mo whoosh: pitch-diving sweep for bullet-time entry
+//     (a falling sine glide under a darkening noise wash — time going viscous)
+{
+  const len = secs(0.55);
+  const s = new Float64Array(len);
+  const random = rng(9);
+  const noise = bandNoise(len, 1400, 0.35, random);
+  let phase = 0;
+  for (let i = 0; i < len; i++) {
+    const t = i / SR;
+    const k = Math.min(1, t / 0.45); // glide progress
+    const f = 520 * Math.pow(0.22, k); // 520 Hz → ~115 Hz exponential dive
+    phase += (2 * Math.PI * f) / SR;
+    const wash = noise[i] * (1 - k * 0.8);
+    const body = Math.sin(Math.PI * Math.min(1, t / (len / SR))); // swell-fade
+    s[i] = (Math.sin(phase) * 0.55 + wash * 0.4) * body * env(i, 0.02, 0.4) * 0.9;
+  }
+  writeWav('slowmo.wav', s);
+}
+
 // --- crowd bed: loopable murmur (low noise with slow undulation)
 {
   const len = secs(3.0);

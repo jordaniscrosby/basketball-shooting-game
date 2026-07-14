@@ -142,6 +142,30 @@ export const tuning = {
     guideLenFrac: 0.22,
   },
 
+  /** Click-click aim: first click sets direction, second stops the oscillating power meter. */
+  clickclick: {
+    /** Meter sweep speed (full 0→1 traversals per second). */
+    meterSpeed: 0.9,
+    /** Meter fill that maps to solved-perfect power (the green center of the gradient). */
+    sweetFrac: 0.5,
+    /**
+     * Power ratio swing across the whole meter: edges land at
+     * 1 ± sweetFrac·powerSpan of the reference flick speed. aimShot's
+     * powerSensitivity easing and powerMin/Max clamp still apply on top.
+     */
+    powerSpan: 1.0,
+    /** Aim guide line length (viewport-height fraction). */
+    guideLenFrac: 0.22,
+    /**
+     * Click-click overrides the swipe assist's lateral mapping: the arrow IS
+     * the aim, so clicked angle → shot angle 1:1 (gain 1, wide clamp). The
+     * forgiveness dial for this mode is the meter, not the direction.
+     */
+    lateralGain: 1.0,
+    /** Max lateral angle error for click-click aim (rad). */
+    lateralMax: 0.6,
+  },
+
   curve: {
     /** Master switch for mid-flight steering (body English). */
     enabled: true,
@@ -175,6 +199,44 @@ export const tuning = {
     keySpeed: 1.1,
     /** Visual sidespin: extra mesh spin (rad/s) per m/s² of lateral steer accel. */
     visualSpinGain: 0.9,
+  },
+
+  /**
+   * Bullet time while curving: the moment a steer drag (or WASD) engages
+   * mid-flight, world time eases toward a slowed scale — deeper at higher
+   * star multipliers, so a hot run literally buys more air time to bend the
+   * shot into bonus territory. Physics still steps at exactly 1/stepHz
+   * (determinism untouched); slow-mo only stretches wall-clock between steps.
+   */
+  slowmo: {
+    enabled: true,
+    /** Time scale while steering at ×1 multiplier (1 = no slowdown). */
+    scaleAtX1: 0.7,
+    /** Time scale while steering at the max star multiplier — deepest dive. */
+    scaleAtMax: 0.35,
+    /** Ease-in rate toward the slowed scale (per second) — the dip. */
+    easeIn: 9,
+    /** Ease-out rate back to real time (per second) — the snap back. */
+    easeOut: 4,
+  },
+
+  /**
+   * Aim-time flight preview: a ghost Rapier world (same colliders, same
+   * forces, same fixed step) simulates the shot ahead of release, so the
+   * trajectory line IS the future of the ball — rim and backboard bounces
+   * included. Steering can't be predicted; the preview is the unsteered path.
+   */
+  trajectory: {
+    enabled: true,
+    /**
+     * How far into the future the preview shows (s). Deliberately shorter
+     * than a full flight — a guide, not a spoiler: the line ends before the
+     * rim verdict.
+     */
+    horizonSec: 1.0,
+    /** After the predicted path touches the backboard, keep only this much
+     *  more of it (s) — show the bank kiss, not the rebound outcome. */
+    boardFollowSec: 0.2,
   },
 
   spin: {
@@ -245,6 +307,9 @@ export const tuning = {
       curve: 25,
       fullBender: 60,
       steez: 30,
+      snake: 40,
+      /** Per combo level beyond the first (CURVE COMBO ×N = (N−1) × this). */
+      curveCombo: 25,
     },
     /** Rim contacts ≥ this on a make = LUCKY ROLL (rattle-in drama). */
     luckyRollContacts: 3,
@@ -252,6 +317,10 @@ export const tuning = {
     curveDevThreshold: 0.25,
     /** Δv budget fraction spent that upgrades to FULL BENDER!!. */
     benderBudgetFrac: 0.85,
+    /** Lateral Δv spent in EACH direction (m/s) that flags a mid-air switch (SNAKE!!). */
+    snakeMinDvEach: 0.25,
+    /** Curve-combo level where the combo bonus stops growing. */
+    curveComboCap: 6,
     /** Distance bands (m from rim centre): close < mid < three < deep. */
     bandMid: 4.5,
     bandThree: 6.5,
@@ -277,6 +346,8 @@ export const tuning = {
     tickVolume: 0.5,
     multHitVolume: 0.8,
     bassHitVolume: 0.9,
+    /** Bullet-time whoosh volume on slow-mo entry. */
+    slowmoVolume: 0.7,
   },
 
   debug: {

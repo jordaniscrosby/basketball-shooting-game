@@ -26,6 +26,7 @@ export interface CareerStats {
 const LEADERBOARD_KEY = 'streak.leaderboard';
 const STATS_KEY = 'streak.stats';
 const LEGACY_BEST_KEY = 'streak.best';
+const MUTED_KEY = 'streak.muted';
 const TOP_N = 10;
 
 export function emptyStats(): CareerStats {
@@ -91,4 +92,20 @@ export function saveStats(stats: CareerStats): void {
 export function loadBestRun(): number {
   const lb = loadLeaderboard();
   return Math.max(lb[0]?.runScore ?? 0, loadStats().bestRun);
+}
+
+export function loadMuted(): boolean {
+  try {
+    return localStorage.getItem(MUTED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function saveMuted(muted: boolean): void {
+  try {
+    localStorage.setItem(MUTED_KEY, muted ? '1' : '0');
+  } catch {
+    // Storage unavailable — the choice just won't persist.
+  }
 }

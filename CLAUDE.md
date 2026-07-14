@@ -30,9 +30,9 @@ Each directory has its own CLAUDE.md with per-file detail. Read the one for the 
 | -------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | `src/config/`  | ALL constants: `tuning.ts` (physics/gameplay), `artTheme.ts` (visual), `positions.ts` (shot pool)              | [src/config/CLAUDE.md](src/config/CLAUDE.md)   |
 | `src/core/`    | Fixed-timestep loop, `GameRun` state machine                                                                   | [src/core/CLAUDE.md](src/core/CLAUDE.md)       |
-| `src/input/`   | Swipe / slingshot / WASD input, velocity estimator, shared `Gesture` contract                                  | [src/input/CLAUDE.md](src/input/CLAUDE.md)     |
+| `src/input/`   | Swipe / slingshot / click-click / WASD input, velocity estimator, shared `Gesture` contract                    | [src/input/CLAUDE.md](src/input/CLAUDE.md)     |
 | `src/physics/` | Rapier world, ball body, hoop colliders                                                                        | [src/physics/CLAUDE.md](src/physics/CLAUDE.md) |
-| `src/systems/` | The shot pipeline: aim, solver, spin, curve steering, scoring, score engine, scheduler, replay, battery, audio | [src/systems/CLAUDE.md](src/systems/CLAUDE.md) |
+| `src/systems/` | The shot pipeline: aim, solver, spin, curve steering, scoring, score engine, scheduler, replay, battery, trajectory preview, audio | [src/systems/CLAUDE.md](src/systems/CLAUDE.md) |
 | `src/net/`     | Visual-only Verlet net                                                                                         | [src/net/CLAUDE.md](src/net/CLAUDE.md)         |
 | `src/scene/`   | Rendering + comic-ink art stack: toon cel shading, boiling outlines, court, camera rig, trail                  | [src/scene/CLAUDE.md](src/scene/CLAUDE.md)     |
 | `src/fx/`      | 2D-canvas comic overlay (onomatopoeia cards, freeze panels)                                                    | [src/fx/CLAUDE.md](src/fx/CLAUDE.md)           |
@@ -44,7 +44,7 @@ Each directory has its own CLAUDE.md with per-file detail. Read the one for the 
 
 **`src/main.ts` is the orchestrator.** Everything is wired inside one big `boot()` closure (`main.ts:51`): init Rapier → scene → physics world → hoop → ball → systems → inputs → debug panel → `FixedLoop`. The systems modules are pure and composable; main.ts owns the game-flow glue (shot lifecycle closures `holdBallAt`, `flyToNext`, `fireShot`, `resolveShot`).
 
-**Fixed 60 Hz timestep with render interpolation** (`core/loop.ts`, gaffer-style accumulator). `update(dt)` runs zero-or-more times per frame at exactly `1/stepHz` and owns all physics, state mutation, and scoring; `render(alpha, frameDt)` runs once per frame and owns all interpolation, camera, and drawing. This split is load-bearing: it makes shots deterministic, which is what makes the shot-replay debug tool and the shot battery possible. Tick-accurate quantities use `dt` in update; purely visual springs/decays use `frameDt` in render.
+**Fixed 60 Hz timestep with render interpolation** (`core/loop.ts`, gaffer-style accumulator). `update(dt)` runs zero-or-more times per frame at exactly `1/stepHz` and owns all physics, state mutation, and scoring; `render(alpha, frameDt)` runs once per frame and owns all interpolation, camera, and drawing. This split is load-bearing: it makes shots deterministic, which is what makes the shot-replay debug tool and the shot battery possible. Tick-accurate quantities use `dt` in update; purely visual springs/decays use `frameDt` in render. Bullet time (`tuning.slowmo`: engaged while curve-steering mid-flight, deeper at higher star multipliers) works by scaling `FixedLoop.timeScale` — the wall-clock feed to the accumulator — so slow-mo stretches step spacing without touching the step sequence, and determinism holds.
 
 **The shot pipeline** (gesture → score), orchestrated by main.ts:
 

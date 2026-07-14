@@ -1,9 +1,12 @@
 /**
- * Control scheme selection: touch swipe vs mouse slingshot. Auto-detected
- * from the primary pointer, overridable via the HUD toggle (persisted).
+ * Control scheme selection: touch swipe, mouse slingshot, or click-click
+ * (aim click + power-meter click). Auto-detected from the primary pointer,
+ * overridable via the HUD toggle (persisted), which cycles all modes.
  */
 
-export type ControlMode = 'swipe' | 'slingshot';
+export type ControlMode = 'swipe' | 'slingshot' | 'clickclick';
+
+const MODES: readonly ControlMode[] = ['swipe', 'slingshot', 'clickclick'];
 
 const KEY = 'streak.controlMode';
 
@@ -16,10 +19,15 @@ export function detectControlMode(): ControlMode {
   }
 }
 
+/** HUD toggle order: swipe → slingshot → clickclick → swipe. */
+export function nextControlMode(mode: ControlMode): ControlMode {
+  return MODES[(MODES.indexOf(mode) + 1) % MODES.length]!;
+}
+
 export function loadControlMode(): ControlMode {
   try {
     const v = localStorage.getItem(KEY);
-    if (v === 'swipe' || v === 'slingshot') return v;
+    if (v === 'swipe' || v === 'slingshot' || v === 'clickclick') return v;
   } catch {
     // Storage unavailable — fall through to detection.
   }

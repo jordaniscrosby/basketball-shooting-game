@@ -7,7 +7,7 @@ Everything here is visual-only — no gameplay state, no physics. All style cons
 1. **Cel fills** — `toon.ts`: one shared N-step `NearestFilter` gradient `DataTexture`; `toonMaterial()` (`MeshToonMaterial`) is the only lit material; flat environment fills use `MeshBasicMaterial`. The gradient is a cached module singleton — after mutating `artTheme.cel`, call `refreshGradientMap()`. Lighting in `scene.ts` (ambient 1.35 + directional 1.85, shadows OFF, `NoToneMapping`) is tuned purely to place the cel step bands — don't "fix" it.
 2. **Ink outlines** — `outlines.ts` `class OutlineBoiler`: inverted-hull BackSide copies per mesh (`outline(mesh, width)`), with `smoothedNormals()` so box corners don't split, renderOrder parent−1 to avoid z-fighting.
 3. **Line boil** — `artTheme.boil.variants` pre-jittered variants cycled at `boil.rateHz` ("on threes"). One clock: `OutlineBoiler.update(dt)` cycles hulls and fires `onCycle(cb)` which main.ts fans out to `court.applyBoilFrame` and `blobShadow.applyBoilFrame` (texture-variant swaps, not per-frame geometry work).
-4. **Thick ink strokes** — `inkRibbon.ts` `class RibbonBatch`: batched camera-facing quads (`begin(camera)` → `quad(...)` → `end()`), rebuilt every frame by callers. Exists because Windows/ANGLE locks GL line width to 1px — fat strokes must be geometry. Used by `trail.ts` and `net/verletNet.ts`.
+4. **Thick ink strokes** — `inkRibbon.ts` `class RibbonBatch`: batched camera-facing quads (`begin(camera)` → `quad(...)` → `end()`), rebuilt every frame by callers. Exists because Windows/ANGLE locks GL line width to 1px — fat strokes must be geometry. Used by `trail.ts`, `net/verletNet.ts`, and `trajectoryLine.ts` (release flash; also the one caller of the live `opacity` setter).
 5. **Comic 2D layer** — `src/fx/comicFx.ts` (separate canvas, see its CLAUDE.md).
 
 ## Files
@@ -20,6 +20,7 @@ Everything here is visual-only — no gameplay state, no physics. All style cons
 - **blobShadow.ts** — `class BlobShadow`: ink ellipse under the ball (real shadow maps are off); spreads/fades with height; boils via `applyBoilFrame`.
 - **cameraRig.ts** — `class CameraRig(camera, rimCenter)`: hoop-centered choreography — `snapTo`, `flyTo(pos, onArrive)` (the between-shots pacing beat), `startReleasePush()`, `update(dt)`. Reads `tuning.camera.*`; the only scene module with no artTheme coupling.
 - **trail.ts** — `class BallTrail`: dash speed-line trail on `RibbonBatch`; recolors by heat tier (`setHeat`) and while steering (`setSteering`).
+- **trajectoryLine.ts** — `class TrajectoryLine`: the aim-time flight preview — instanced ink-dot spheres (one draw call) laid along the predicted points from `systems/trajectory.ts`, every `artTheme.trajectory.everyN`th step, shrinking toward the future. Three modes: `show(points)` aim preview (dotted ink) / `ignite(points)` release flash — one CONTINUOUS solid-gold `RibbonBatch` stroke, never dotted, rebuilt camera-facing each frame and faded over `releaseFadeSec` by `update(frameDt, camera)` / hidden. `hide()` only clears the aim preview — an in-flight flash owns the line until it fades. Driven by main.ts's `updateAimPreview` (aim) and `fireShot` (ignite). Visual-only, never a collider.
 
 ## Per-frame render order (wired in main.ts render callback)
 

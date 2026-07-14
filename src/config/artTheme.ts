@@ -157,6 +157,27 @@ export const artTheme = {
     dashEvery: 2,
   },
 
+  /** Aim-time trajectory preview: dotted ink arc along the predicted flight. */
+  trajectory: {
+    /** Dot color — ink, same as every other drawn line. */
+    color: '#2b1d16',
+    opacity: 0.55,
+    /** Dot radius (m) at the release end of the arc. */
+    dotRadius: 0.016,
+    /** Draw a dot every N predicted physics steps — the dotted-line spacing. */
+    everyN: 3,
+    /** Dot scale at the far (future) end — dots shrink toward the future. */
+    endScale: 0.4,
+    /** Release flash: the moment the shot fires the path relights as one
+     *  CONTINUOUS solid gold ribbon (never dotted — same gold as the
+     *  star/mult family) and fades out. */
+    releaseColor: '#f7c948',
+    releaseOpacity: 1.0,
+    releaseFadeSec: 0.6,
+    /** Ribbon stroke width (m) at the release end; tapers by endScale. */
+    releaseWidth: 0.03,
+  },
+
   /** Comic FX overlay: the choppy 2D cartoon layer over the 60 fps world. */
   fx: {
     /** Stepped animation rate (fps) — "on twos", the layer's signature chop. */
@@ -208,6 +229,23 @@ export const artTheme = {
     panelFillAlpha: 0.45,
     /** Backdrop opacity behind the stats/game-over card. */
     screenAlpha: 0.85,
+  },
+
+  /**
+   * Bullet-time visual language (gameplay trigger/depth live in
+   * tuning.slowmo): the camera pinches its FOV toward the ball and the FX
+   * overlay draws a warp tunnel — streak lines rushing toward center plus an
+   * ink vignette — all scaled by slow-mo strength (0 = real time, 1 = deepest).
+   */
+  slowmoFx: {
+    /** Camera FOV multiplier at full slow-mo strength (<1 = zoom in). */
+    fovScale: 0.86,
+    /** Warp streak-line opacity at full strength. */
+    warpAlpha: 0.5,
+    /** Warp streak lines around the tunnel. */
+    warpLineCount: 30,
+    /** Ink vignette opacity at full strength. */
+    vignetteAlpha: 0.26,
   },
 
   /** Heat mirrored onto the hoop: rim emissive intensity per tier — the rim

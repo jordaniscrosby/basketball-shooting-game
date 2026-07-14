@@ -64,6 +64,22 @@ describe('assisted aim mapping', () => {
     expect(capped.sidespin).toBe(1);
   });
 
+  it('a lateral-mapping override bypasses the swipe assist (click-click aims 1:1)', () => {
+    const az = 0.5; // past the swipe assist's clamp (0.5 × 0.35 > lateralMax)
+    const assisted = aimShot(LAUNCH, RIM, gesture({ azimuth: az }));
+    expect(assisted.lateralError).toBe(tuning.input.lateralMax);
+
+    const direct = aimShot(LAUNCH, RIM, gesture({ azimuth: az }), {
+      lateralGain: 1,
+      lateralMax: tuning.clickclick.lateralMax,
+    });
+    expect(direct.lateralError).toBeCloseTo(az, 10);
+
+    // The tuning.clickclick object itself satisfies the mapping shape.
+    const viaTuning = aimShot(LAUNCH, RIM, gesture({ azimuth: az }), tuning.clickclick);
+    expect(viaTuning.lateralError).toBeCloseTo(az * tuning.clickclick.lateralGain, 10);
+  });
+
   it('classifies miss modes readably', () => {
     expect(classifyShot(aimShot(LAUNCH, RIM, gesture()))).toBe('PURE');
     expect(classifyShot(aimShot(LAUNCH, RIM, gesture({ upSpeed: 0.5 })))).toBe('SHORT');

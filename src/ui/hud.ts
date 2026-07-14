@@ -126,11 +126,17 @@ export class Hud {
   private readonly leaderboardEl = document.getElementById('leaderboard')!;
   private readonly careerEl = document.getElementById('career-stats')!;
   private readonly controlsBtn = document.getElementById('controls-btn')!;
+  private readonly soundBtn = document.getElementById('sound-btn')!;
 
-  constructor(onToggleStats: () => void, onToggleControls: () => void) {
+  constructor(
+    onToggleStats: () => void,
+    onToggleControls: () => void,
+    onToggleSound: () => void,
+  ) {
     document.getElementById('stats-btn')!.addEventListener('click', onToggleStats);
     document.getElementById('retry-btn')!.addEventListener('click', onToggleStats);
     this.controlsBtn.addEventListener('click', onToggleControls);
+    this.soundBtn.addEventListener('click', onToggleSound);
     this.buildFlames();
   }
 
@@ -154,7 +160,12 @@ export class Hud {
   }
 
   setControlMode(mode: ControlMode): void {
-    this.controlsBtn.textContent = mode === 'slingshot' ? 'input: drag' : 'input: swipe';
+    this.controlsBtn.textContent =
+      mode === 'slingshot' ? 'input: drag' : mode === 'clickclick' ? 'input: click' : 'input: swipe';
+  }
+
+  setMuted(muted: boolean): void {
+    this.soundBtn.textContent = muted ? 'sound: off' : 'sound: on';
   }
 
   /** Optional swirl cameo: paints behind the stats/game-over card. */
